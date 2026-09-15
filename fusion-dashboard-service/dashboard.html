@@ -27,6 +27,13 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
     thead th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #dee2e6; }
+    th.sortable { cursor: pointer; user-select: none; position: relative; }
+    th.sortable:hover { background: #f1f3f5; }
+    .sort-arrow { font-size: 0.7em; color: #6c757d; }
+    .filter-btn { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; font-size: 0.75em; color: #adb5bd; }
+    .filter-btn.active { color: #0d6efd; font-weight: 700; }
+    .col-filter-popup { position: absolute; top: 100%; left: 0; z-index: 20; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-weight: normal; text-align: left; min-width: 130px; max-height: 220px; overflow-y: auto; }
+    .col-filter-popup label { display: block; white-space: nowrap; font-weight: normal; }
     tbody tr.datarow { cursor: pointer; }
     tbody tr.datarow:hover { background: #f1f3f5; }
     tr.detail td { background: #f8f9fa; white-space: normal; }
@@ -109,9 +116,20 @@
     <div class="table-wrap">
         <table>
             <thead>
-                <tr>
-                    <th></th><th>IP</th><th>Name</th><th>FW</th><th>Temp</th><th>PTP</th>
-                    <th title="Red = primary comms interface">Red</th><th title="Blue = backup, only carries traffic when Red is unreachable">Blue</th><th>Warn</th><th>NMOS</th><th>Syslog</th><th>Last poll</th><th></th>
+                <tr id="deviceTableHead">
+                    <th></th>
+                    <th class="sortable" data-key="ip">IP<span class="sort-arrow"></span></th>
+                    <th class="sortable" data-key="name">Name<span class="sort-arrow"></span></th>
+                    <th class="sortable" data-key="fw">FW<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="fw" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="temp">Temp<span class="sort-arrow"></span></th>
+                    <th class="sortable" data-key="ptp">PTP<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="ptp" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="red" title="Red = primary comms interface">Red<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="red" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="blue" title="Blue = backup, only carries traffic when Red is unreachable">Blue<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="blue" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="warn">Warn<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="warn" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="nmos">NMOS<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="nmos" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="syslog">Syslog<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="syslog" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="lastpoll">Last poll<span class="sort-arrow"></span></th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="deviceTableBody"></tbody>
@@ -130,6 +148,128 @@ let filterText = "";
 let onlyProblems = false;
 let statusFilter = null;
 let lastData = { devices: [] };
+let sortKey = "ip";
+let sortDir = "asc";
+let columnFilters = {}; // key -> Set of allowed values; absent = no restriction
+const FILTERABLE_COLUMNS = ["fw", "ptp", "red", "blue", "warn", "nmos", "syslog"];
+
+// Single source of truth for what each column shows, used by both sorting
+// and filtering so they always agree with what's rendered in the cell.
+function columnValue(dev, key) {
+    const health = dev.health || {};
+    const node = health.node || {};
+    const hlt = node.health || {};
+    const refclk = node.refclk || {};
+    const ifs = node.interfaces || {};
+    const cfg = dev.config || {};
+    const fw = cfg.firmware && cfg.firmware.info ? cfg.firmware.info.find(f => f.active === "yes") : null;
+    const nmos = cfg.nmos || {};
+    const warnings = health.warnings || [];
+    const syslogCfg = (cfg.syslog && cfg.syslog.config) || {};
+    const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
+    switch (key) {
+        case "ip": return dev.ip.split(".").map(Number);
+        case "name": return ((cfg.ipconfig && cfg.ipconfig.hostname) || dev.name || "").toLowerCase();
+        case "fw": return fw ? fw.semantic_version : "-";
+        case "temp": return hlt.core_temp ?? null;
+        case "ptp": return refclk.status || "-";
+        case "red": return (ifs.e1 && ifs.e1.link_status) || "-";
+        case "blue": return (ifs.e2 && ifs.e2.link_status) || "-";
+        case "warn": return warnings.length ? "warning" : (bothLinksDown ? "offline" : "OK");
+        case "nmos": return nmos.status || "-";
+        case "syslog": return syslogCfg.enable ? "on" : "off";
+        case "lastpoll": return dev.lastPollAt || "";
+        default: return "";
+    }
+}
+
+function compareDevices(a, b, key, dir) {
+    const va = columnValue(a, key);
+    const vb = columnValue(b, key);
+    let cmp;
+    if (key === "ip") {
+        cmp = 0;
+        for (let i = 0; i < 4; i++) { if (va[i] !== vb[i]) { cmp = va[i] - vb[i]; break; } }
+    } else if (key === "temp") {
+        if (va === null && vb === null) cmp = 0;
+        else if (va === null) cmp = 1;
+        else if (vb === null) cmp = -1;
+        else cmp = va - vb;
+    } else {
+        cmp = String(va).localeCompare(String(vb));
+    }
+    return dir === "desc" ? -cmp : cmp;
+}
+
+function sortedDevices() {
+    return [...lastData.devices].sort((a, b) => compareDevices(a, b, sortKey, sortDir));
+}
+
+function updateHeaderIndicators() {
+    document.querySelectorAll("#deviceTableHead th.sortable").forEach(th => {
+        const arrow = th.querySelector(".sort-arrow");
+        arrow.textContent = th.dataset.key === sortKey ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+    });
+    document.querySelectorAll("#deviceTableHead .filter-btn").forEach(btn => {
+        btn.classList.toggle("active", !!columnFilters[btn.dataset.key]);
+    });
+}
+
+function closeColumnFilterPopup() {
+    const existing = document.getElementById("colFilterPopup");
+    if (existing) existing.remove();
+}
+
+function toggleColumnFilterPopup(key, btn) {
+    const existing = document.getElementById("colFilterPopup");
+    const reopening = existing && existing.dataset.key === key;
+    closeColumnFilterPopup();
+    if (reopening) return;
+
+    const values = Array.from(new Set(lastData.devices.map(d => columnValue(d, key)))).sort();
+    const current = columnFilters[key];
+    const popup = document.createElement("div");
+    popup.id = "colFilterPopup";
+    popup.className = "col-filter-popup";
+    popup.dataset.key = key;
+    popup.innerHTML =
+        values.map(v => `<label class="small"><input type="checkbox" value="${v}" ${(!current || current.has(v)) ? "checked" : ""}> ${v}</label>`).join("") +
+        `<div style="margin-top:6px; display:flex; gap:6px;">
+            <button type="button" class="btn" id="colFilterAll">All</button>
+            <button type="button" class="btn" id="colFilterNone">None</button>
+        </div>`;
+    btn.closest("th").appendChild(popup);
+
+    popup.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener("change", () => {
+            if (!columnFilters[key]) columnFilters[key] = new Set(values);
+            if (cb.checked) columnFilters[key].add(cb.value); else columnFilters[key].delete(cb.value);
+            if (columnFilters[key].size === values.length) delete columnFilters[key];
+            applyDisplay();
+        });
+    });
+    popup.querySelector("#colFilterAll").onclick = (ev) => { ev.stopPropagation(); delete columnFilters[key]; applyDisplay(); closeColumnFilterPopup(); };
+    popup.querySelector("#colFilterNone").onclick = (ev) => { ev.stopPropagation(); columnFilters[key] = new Set(); applyDisplay(); };
+    popup.addEventListener("click", (ev) => ev.stopPropagation());
+}
+
+document.addEventListener("click", closeColumnFilterPopup);
+
+document.querySelectorAll("#deviceTableHead th.sortable").forEach(th => {
+    th.addEventListener("click", (ev) => {
+        if (ev.target.closest(".filter-btn") || ev.target.closest(".col-filter-popup")) return;
+        const key = th.dataset.key;
+        if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+        else { sortKey = key; sortDir = "asc"; }
+        applyDisplay();
+    });
+});
+document.querySelectorAll("#deviceTableHead .filter-btn").forEach(btn => {
+    btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        toggleColumnFilterPopup(btn.dataset.key, btn);
+    });
+});
 
 // MN SET runs on the same host as this dashboard, on port 8080.
 document.getElementById("mnSetLink").href = `http://${location.hostname}:8080/`;
@@ -161,15 +301,25 @@ function portsTable(ports) {
 function deviceMatchesFilter(dev) {
     if (onlyProblems && dev.status === "online") return false;
     if (statusFilter && dev.status !== statusFilter) return false;
+    for (const key of FILTERABLE_COLUMNS) {
+        const allowed = columnFilters[key];
+        if (allowed && !allowed.has(String(columnValue(dev, key)))) return false;
+    }
     if (!filterText) return true;
     const hostname = (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "";
     const haystack = (dev.ip + " " + (dev.name || "") + " " + (dev.tag || "") + " " + hostname).toLowerCase();
     return haystack.includes(filterText);
 }
 
+/** Re-sorts and re-filters using already-fetched data - no network call. */
+function applyDisplay() {
+    sortedDevices().forEach(renderRow);
+    updateHeaderIndicators();
+}
+
 function setStatusFilter(status) {
     statusFilter = (statusFilter === status) ? null : status;
-    lastData.devices.forEach(renderRow);
+    applyDisplay();
     renderSummary(lastData.summary);
 }
 
@@ -206,20 +356,22 @@ async function rebootDevice(ip) {
 
 function renderRow(dev) {
     const id = cssId(dev.ip);
+    const tbody = document.getElementById("deviceTableBody");
     let row = document.getElementById("row-" + id);
     let detail = document.getElementById("detail-" + id);
-    const isNew = !row;
-    if (isNew) {
-        const tbody = document.getElementById("deviceTableBody");
+    if (!row) {
         row = document.createElement("tr");
         row.id = "row-" + id;
         row.className = "datarow";
         detail = document.createElement("tr");
         detail.id = "detail-" + id;
         detail.className = "detail hidden";
-        tbody.appendChild(row);
-        tbody.appendChild(detail);
     }
+    // Always (re)append in current sort order - appendChild moves an
+    // already-attached node rather than duplicating it, so this is how
+    // the table gets re-ordered on every sort/filter change.
+    tbody.appendChild(row);
+    tbody.appendChild(detail);
 
     const health = dev.health || {};
     const node = health.node || {};
@@ -366,10 +518,11 @@ async function refresh() {
         const res = await fetch("/api/state", { cache: "no-store" });
         const data = await res.json();
         lastData = data;
-        data.devices.forEach(renderRow);
+        sortedDevices().forEach(renderRow);
         pruneRemovedRows(data.devices);
         renderSummary(data.summary);
         renderWarningsPanel(data.devices);
+        updateHeaderIndicators();
         document.getElementById("lastUpdate").textContent = "service data as of " + fmtTime(data.generatedAt);
         updatePollingButton(data.pollingEnabled);
     } catch (e) {
@@ -421,11 +574,11 @@ async function setDeviceSyslogEnable(ip, enable, checkboxEl) {
 
 document.getElementById("filterInput").addEventListener("input", (ev) => {
     filterText = ev.target.value.trim().toLowerCase();
-    lastData.devices.forEach(renderRow);
+    applyDisplay();
 });
 document.getElementById("onlyProblemsCheck").addEventListener("change", (ev) => {
     onlyProblems = ev.target.checked;
-    lastData.devices.forEach(renderRow);
+    applyDisplay();
 });
 document.getElementById("addDeviceForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
