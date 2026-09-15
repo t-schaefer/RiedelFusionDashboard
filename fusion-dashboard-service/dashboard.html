@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PLS Fusion Dashboard</title>
+<style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; color: #212529; font-size: 14px; }
+    header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid #dee2e6; }
+    header .title { font-size: 1.3rem; font-weight: 600; margin-right: 10px; }
+    .muted { color: #6c757d; }
+    .small { font-size: 0.8rem; }
+    .toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
+    .toolbar form { display: flex; gap: 6px; margin-left: auto; }
+    input[type=text] { padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; color: #fff; font-weight: 600; }
+    .badge.success { background: #198754; }
+    .badge.warning { background: #ffc107; color: #212529; }
+    .badge.danger { background: #dc3545; }
+    .badge.secondary { background: #6c757d; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .dot.success { background: #198754; }
+    .dot.warning { background: #ffc107; }
+    .dot.danger { background: #dc3545; }
+    .dot.secondary { background: #adb5bd; }
+    .table-wrap { overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #dee2e6; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+    thead th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #dee2e6; }
+    tbody tr.datarow { cursor: pointer; }
+    tbody tr.datarow:hover { background: #f1f3f5; }
+    tr.detail td { background: #f8f9fa; white-space: normal; }
+    .hidden { display: none; }
+    tr.hidden { display: none; }
+    .btn { padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.78rem; }
+    .btn.danger { color: #dc3545; border-color: #dc3545; }
+    .alert { background: #f8d7da; color: #842029; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 8px; }
+    .mini-table { border-collapse: collapse; font-size: 0.78rem; }
+    .mini-table td, .mini-table th { padding: 2px 6px; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+    .footnote { color: #6c757d; font-size: 0.8rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+    <header>
+        <span class="title">PLS Fusion Dashboard</span>
+        <span id="summaryBar"></span>
+        <a id="mnSetLink" class="btn" href="#" target="_blank" rel="noopener" style="margin-left:auto; text-decoration:none;">MN SET</a>
+        <button class="btn" id="pollingToggleBtn">...</button>
+        <span class="muted small" id="lastUpdate"></span>
+    </header>
+
+    <div class="toolbar">
+        <input type="text" id="filterInput" placeholder="Filter: IP, name or tag" style="width:220px">
+        <label class="small"><input type="checkbox" id="onlyProblemsCheck"> show only problems</label>
+        <button type="button" class="btn" id="syslogToggleBtn">Syslog (all devices)</button>
+        <form id="addDeviceForm">
+            <input type="text" id="newDeviceIp" placeholder="Device IP" required style="width:130px">
+            <input type="text" id="newDeviceName" placeholder="Name (optional)" style="width:150px">
+            <button type="submit" class="btn">+ Device</button>
+        </form>
+    </div>
+
+    <div id="syslogPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+        <div class="small muted" style="margin-bottom:8px;">
+            Applies this syslog target to every device currently in the fleet list below (unverified against a live unit - see server.py comment on configure_syslog; test on one device first if unsure).
+        </div>
+        <form id="syslogForm">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <input type="text" id="syslogServer" placeholder="Syslog server IP" value="10.12.64.24" required style="width:160px">
+                <input type="number" id="syslogPort" placeholder="Port" value="514" required style="width:90px">
+                <label class="small"><input type="checkbox" id="syslogEnable" checked> enable</label>
+            </div>
+            <details open style="margin-top:8px;">
+                <summary style="cursor:pointer; font-weight:600;">Monitoring - Common</summary>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+                    <label class="small"><input type="checkbox" id="syslogPtpEvent" checked> PTP event</label>
+                    <label class="small"><input type="checkbox" id="syslogTempEvent" checked> temperature event</label>
+                </div>
+            </details>
+            <details open style="margin-top:8px;">
+                <summary style="cursor:pointer; font-weight:600;">Monitoring - Decap</summary>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+                    <label class="small"><input type="checkbox" id="syslogOutputFlywheel" checked> Output FlyWheel</label>
+                    <label class="small"><input type="checkbox" id="syslogMemoryPacketError" checked> Memory packet error</label>
+                    <label class="small"><input type="checkbox" id="syslogFlowImpairment" checked> Flow impairment</label>
+                    <label class="small"><input type="checkbox" id="syslogDash7Fifo" checked> Dash-7 FIFO</label>
+                    <label class="small"><input type="checkbox" id="syslogRepeatedFrame" checked> Repeated output frame</label>
+                    <label class="small"><input type="checkbox" id="syslogSkippedFrame" checked> Skipped output frame</label>
+                </div>
+            </details>
+            <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+                <button type="submit" class="btn danger">Apply to all devices</button>
+                <span id="syslogResult" class="small muted"></span>
+            </div>
+        </form>
+    </div>
+
+    <div id="warningsPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+        <div class="small muted" style="margin-bottom:8px;">Devices currently reporting warnings. Click a row to jump to that device.</div>
+        <table class="mini-table" style="width:100%">
+            <thead><tr><th>IP</th><th>Name</th><th>Codes</th></tr></thead>
+            <tbody id="warningsPanelBody"></tbody>
+        </table>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th></th><th>IP</th><th>Name</th><th>FW</th><th>Temp</th><th>PTP</th>
+                    <th>E1</th><th>E2</th><th>Warn</th><th>NMOS</th><th>Last poll</th><th></th>
+                </tr>
+            </thead>
+            <tbody id="deviceTableBody"></tbody>
+        </table>
+    </div>
+    <div class="footnote">This page only talks to the background service on this host - it never contacts the Fusion devices directly, so it is safe to keep open in many browsers/tabs. Click a row to expand configuration details.</div>
+
+<script>
+// This page is a thin viewer: it polls the local service's /api/state every
+// few seconds and renders whatever the service already collected. All device
+// polling happens server-side in server.py, independent of anyone viewing
+// this page or being logged into this machine.
+
+const REFRESH_MS = 4000;
+let filterText = "";
+let onlyProblems = false;
+let lastData = { devices: [] };
+
+// MN SET runs on the same host as this dashboard, on port 8080.
+document.getElementById("mnSetLink").href = `http://${location.hostname}:8080/`;
+
+function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString() : "-"; }
+function fmtBw(bytesPerSec) {
+    if (bytesPerSec === undefined || bytesPerSec === null) return "-";
+    return ((bytesPerSec * 8) / 1e6).toFixed(1) + " Mb/s";
+}
+function statusDot(status) {
+    const cls = status === "online" ? "success" : status === "warning" ? "warning" : status === "offline" ? "danger" : "secondary";
+    return `<span class="dot ${cls}"></span>`;
+}
+function licenseBadges(license) {
+    if (!license || !license.feature) return "";
+    return Object.entries(license.feature)
+        .map(([k, v]) => `<span class="badge secondary" style="opacity:${v === "licensed" ? 1 : 0.4}">${k}</span>`)
+        .join(" ");
+}
+function portsTable(ports) {
+    if (!ports || !ports.length) return '<span class="muted small">no data</span>';
+    const rows = ports.map(p => {
+        const d = p.detail || {};
+        return `<tr><td>P${p.num}</td><td>${d.link || "-"}</td><td>${d.host_pinout ?? "-"}</td><td>${d.detected_sfp_part_number || "-"}</td></tr>`;
+    }).join("");
+    return `<table class="mini-table"><thead><tr><th>Port</th><th>Link</th><th>Pinout</th><th>SFP</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function deviceMatchesFilter(dev) {
+    if (onlyProblems && dev.status === "online") return false;
+    if (!filterText) return true;
+    const hostname = (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "";
+    const haystack = (dev.ip + " " + (dev.name || "") + " " + (dev.tag || "") + " " + hostname).toLowerCase();
+    return haystack.includes(filterText);
+}
+
+function toggleDetail(ip) {
+    const detail = document.getElementById("detail-" + cssId(ip));
+    if (detail) detail.classList.toggle("hidden");
+}
+
+function cssId(ip) { return ip.replace(/\./g, "-"); }
+
+async function rebootDevice(ip) {
+    if (!confirm(
+        "Reboot Fusion device " + ip + "?\n\n" +
+        "This restarts the unit and will interrupt its SDI/IP signal for a short " +
+        "time. Only do this if you know this device is safe to take down right now.\n\n" +
+        "This action is unverified against the live API (inferred from the " +
+        "self/system 'reboot' field) - if it doesn't work as expected, check " +
+        "service.log for the raw response."
+    )) return;
+    const btn = document.getElementById("reboot-" + cssId(ip));
+    if (btn) { btn.disabled = true; btn.textContent = "Rebooting..."; }
+    try {
+        const res = await fetch("/api/devices/reboot", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip })
+        });
+        const data = await res.json();
+        alert(data.ok ? "Reboot command sent to " + ip + "." : "Failed: " + (data.error || "unknown error"));
+    } catch (e) {
+        alert("Failed to send reboot command: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Reboot"; }
+    }
+}
+
+function renderRow(dev) {
+    const id = cssId(dev.ip);
+    let row = document.getElementById("row-" + id);
+    let detail = document.getElementById("detail-" + id);
+    const isNew = !row;
+    if (isNew) {
+        const tbody = document.getElementById("deviceTableBody");
+        row = document.createElement("tr");
+        row.id = "row-" + id;
+        row.className = "datarow";
+        detail = document.createElement("tr");
+        detail.id = "detail-" + id;
+        detail.className = "detail hidden";
+        tbody.appendChild(row);
+        tbody.appendChild(detail);
+    }
+
+    const health = dev.health || {};
+    const node = health.node || {};
+    const hlt = node.health || {};
+    const refclk = node.refclk || {};
+    const ifs = node.interfaces || {};
+    const cfg = dev.config || {};
+    const liveHostname = cfg.ipconfig && cfg.ipconfig.hostname;
+    const displayName = liveHostname || dev.name || "-";
+    const fw = cfg.firmware && cfg.firmware.info ? cfg.firmware.info.find(f => f.active === "yes") : null;
+    const nmos = cfg.nmos || {};
+    const warnings = (health.warnings) || [];
+    // Thresholds: yellow from 70C, red from 73C (also documented in README.txt).
+    const tempColor = hlt.core_temp >= 73 ? "#dc3545" : hlt.core_temp >= 70 ? "#c98a00" : "#198754";
+
+    row.onclick = (ev) => { if (ev.target.closest("button")) return; toggleDetail(dev.ip); };
+    row.innerHTML = `
+      <td>${statusDot(dev.status)}</td>
+      <td style="font-family:monospace">${dev.ip}</td>
+      <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
+      <td>${fw ? fw.semantic_version : "-"}</td>
+      <td style="color:${tempColor};font-weight:600">${hlt.core_temp ?? "-"}&deg;C</td>
+      <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
+      <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
+      <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
+      <td>${warnings.length
+        ? `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`
+        : `<span class="badge success">OK</span>`}</td>
+      <td><span class="badge ${nmos.status === "connected" ? "success" : "secondary"}">${nmos.status || "-"}</span></td>
+      <td class="muted small">${fmtTime(dev.lastPollAt)}</td>
+      <td><button class="btn danger" title="Remove">&times;</button></td>`;
+    row.querySelector("button.danger").onclick = (ev) => { ev.stopPropagation(); removeDevice(dev.ip); };
+
+    detail.innerHTML = `
+      <td colspan="12">
+        ${dev.status === "offline" ? `<div class="alert">Unreachable${dev.lastError ? " (" + dev.lastError + ")" : ""}</div>` : ""}
+        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start">
+          <div class="small" style="min-width:260px">
+            <div>Serial number: ${(cfg.information && cfg.information.serial_number) || "-"}</div>
+            <div>MAC: ${(cfg.ipconfig && cfg.ipconfig.local_mac) || "-"}</div>
+            <div>E1 IP: ${(cfg.interfaces && cfg.interfaces.e1 && cfg.interfaces.e1.current_ip) || "-"} (${(ifs.e1 && fmtBw(ifs.e1.rx_bw)) || "-"} rx)</div>
+            <div>E2 IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
+            <div>NMOS registry: ${nmos.registry_address || "-"}</div>
+            <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns, fan: ${hlt.fan_speed ?? "-"} rpm</div>
+            ${warnings.length ? `<div style="margin-top:4px">Warnings: ${warnings.map(w => `code ${w.code}${w.uuid ? " (" + w.uuid.join(", ") + ")" : ""}`).join("; ")}</div>` : ""}
+            <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
+            <div class="muted small" style="margin-top:4px">Config loaded: ${fmtTime(dev.configFetchedAt)}${dev.configError ? " - error: " + dev.configError : ""}</div>
+          </div>
+          <div>${portsTable(cfg.ports)}</div>
+          <div style="margin-left:auto">
+            <button class="btn danger" id="reboot-${id}" title="Reboot this device">Reboot</button>
+          </div>
+        </div>
+      </td>`;
+    document.getElementById("reboot-" + id).onclick = (ev) => { ev.stopPropagation(); rebootDevice(dev.ip); };
+
+    const match = deviceMatchesFilter(dev);
+    row.classList.toggle("hidden", !match);
+    if (!match) detail.classList.add("hidden");
+}
+
+function pruneRemovedRows(devices) {
+    const liveIds = new Set(devices.map(d => cssId(d.ip)));
+    document.querySelectorAll("#deviceTableBody tr.datarow").forEach(row => {
+        const id = row.id.replace("row-", "");
+        if (!liveIds.has(id)) {
+            row.remove();
+            const detail = document.getElementById("detail-" + id);
+            if (detail) detail.remove();
+        }
+    });
+}
+
+function renderSummary(summary) {
+    document.getElementById("summaryBar").innerHTML =
+        `<span class="badge success">${summary.online || 0} online</span> ` +
+        `<span class="badge warning" id="warningSummaryBadge" style="cursor:pointer" title="Click to list devices with warnings">${summary.warning || 0} warning</span> ` +
+        `<span class="badge danger">${summary.offline || 0} offline</span> ` +
+        (summary.unknown ? `<span class="badge secondary">${summary.unknown} unknown</span> ` : "") +
+        `<span class="muted small">${summary.total || 0} devices total</span>`;
+    document.getElementById("warningSummaryBadge").onclick = toggleWarningsPanel;
+}
+
+function renderWarningsPanel(devices) {
+    const withWarnings = devices.filter(d => d.health && d.health.warnings && d.health.warnings.length);
+    const body = document.getElementById("warningsPanelBody");
+    if (!withWarnings.length) {
+        body.innerHTML = `<tr><td colspan="3" class="muted small">No devices currently reporting warnings.</td></tr>`;
+        return;
+    }
+    body.innerHTML = withWarnings.map(d => {
+        const codes = d.health.warnings.map(w => "code " + w.code).join(", ");
+        const name = (d.config && d.config.ipconfig && d.config.ipconfig.hostname) || d.name || "-";
+        return `<tr style="cursor:pointer" data-ip="${d.ip}"><td style="font-family:monospace">${d.ip}</td><td>${name}</td><td>${codes}</td></tr>`;
+    }).join("");
+    body.querySelectorAll("tr[data-ip]").forEach(row => {
+        row.onclick = () => focusDevice(row.dataset.ip);
+    });
+}
+
+function toggleWarningsPanel() {
+    document.getElementById("warningsPanel").classList.toggle("hidden");
+}
+
+function focusDevice(ip) {
+    const id = cssId(ip);
+    const row = document.getElementById("row-" + id);
+    const detail = document.getElementById("detail-" + id);
+    if (!row) return;
+    document.getElementById("warningsPanel").classList.add("hidden");
+    row.classList.remove("hidden");
+    if (detail) { detail.classList.remove("hidden"); }
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.style.outline = "2px solid #ffc107";
+    setTimeout(() => { row.style.outline = ""; }, 2000);
+}
+
+async function refresh() {
+    try {
+        const res = await fetch("/api/state", { cache: "no-store" });
+        const data = await res.json();
+        lastData = data;
+        data.devices.forEach(renderRow);
+        pruneRemovedRows(data.devices);
+        renderSummary(data.summary);
+        renderWarningsPanel(data.devices);
+        document.getElementById("lastUpdate").textContent = "service data as of " + fmtTime(data.generatedAt);
+        updatePollingButton(data.pollingEnabled);
+    } catch (e) {
+        document.getElementById("lastUpdate").textContent = "cannot reach service: " + e.message;
+    }
+}
+
+function updatePollingButton(enabled) {
+    const btn = document.getElementById("pollingToggleBtn");
+    btn.textContent = enabled ? "Pause polling (global)" : "Resume polling (global)";
+    btn.dataset.enabled = enabled ? "1" : "0";
+    btn.style.color = enabled ? "" : "#dc3545";
+    btn.style.borderColor = enabled ? "" : "#dc3545";
+}
+
+async function togglePolling() {
+    const btn = document.getElementById("pollingToggleBtn");
+    const currentlyEnabled = btn.dataset.enabled !== "0";
+    const res = await fetch("/api/polling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !currentlyEnabled })
+    });
+    const data = await res.json();
+    updatePollingButton(data.pollingEnabled);
+}
+document.getElementById("pollingToggleBtn").addEventListener("click", togglePolling);
+
+async function removeDevice(ip) {
+    await fetch("/api/devices/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip }) });
+    refresh();
+}
+
+document.getElementById("filterInput").addEventListener("input", (ev) => {
+    filterText = ev.target.value.trim().toLowerCase();
+    lastData.devices.forEach(renderRow);
+});
+document.getElementById("onlyProblemsCheck").addEventListener("change", (ev) => {
+    onlyProblems = ev.target.checked;
+    lastData.devices.forEach(renderRow);
+});
+document.getElementById("addDeviceForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const ip = document.getElementById("newDeviceIp").value.trim();
+    const name = document.getElementById("newDeviceName").value.trim();
+    if (!ip) return;
+    await fetch("/api/devices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip, name }) });
+    ev.target.reset();
+    refresh();
+});
+
+document.getElementById("syslogToggleBtn").addEventListener("click", () => {
+    document.getElementById("syslogPanel").classList.toggle("hidden");
+});
+
+document.getElementById("syslogForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const server = document.getElementById("syslogServer").value.trim();
+    const port = parseInt(document.getElementById("syslogPort").value, 10);
+    const enable = document.getElementById("syslogEnable").checked;
+    const monitoring = {
+        common: {
+            ptp_event: document.getElementById("syslogPtpEvent").checked,
+            temp_event: document.getElementById("syslogTempEvent").checked
+        },
+        decap: {
+            output_flywheel: document.getElementById("syslogOutputFlywheel").checked,
+            memory_pkt_error: document.getElementById("syslogMemoryPacketError").checked,
+            flow_impairment: document.getElementById("syslogFlowImpairment").checked,
+            dash7_fifo_error: document.getElementById("syslogDash7Fifo").checked,
+            frame_repeat: document.getElementById("syslogRepeatedFrame").checked,
+            frame_skipped: document.getElementById("syslogSkippedFrame").checked
+        }
+    };
+    const deviceCount = lastData.devices.length;
+    if (!server || !port) return;
+    if (!confirm(
+        "Apply syslog server " + server + ":" + port + " (enable=" + enable + ") plus the selected " +
+        "Common/Decap monitoring flags to all " + deviceCount + " devices in the fleet?\n\n" +
+        "This changes a live configuration value on every device at once."
+    )) return;
+
+    const resultEl = document.getElementById("syslogResult");
+    resultEl.textContent = "Applying to " + deviceCount + " devices...";
+    try {
+        const res = await fetch("/api/syslog", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ server, port, enable, monitoring })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            resultEl.textContent = data.succeeded + "/" + data.total + " devices updated.";
+            const failed = Object.entries(data.results || {}).filter(([, r]) => !r.ok).map(([ip]) => ip);
+            if (failed.length) resultEl.textContent += " Failed: " + failed.slice(0, 10).join(", ") + (failed.length > 10 ? ", ..." : "");
+        } else {
+            resultEl.textContent = "Failed: " + (data.error || "unknown error");
+        }
+    } catch (e) {
+        resultEl.textContent = "Failed: " + e.message;
+    }
+});
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

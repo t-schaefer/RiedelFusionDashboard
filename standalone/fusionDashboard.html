@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fusion Fleet Dashboard</title>
+<style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; color: #212529; font-size: 14px; }
+    header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid #dee2e6; }
+    header .title { font-size: 1.3rem; font-weight: 600; margin-right: 10px; }
+    .controls { display: flex; align-items: center; gap: 16px; margin-left: auto; flex-wrap: wrap; }
+    .controls label { font-size: 0.8rem; color: #6c757d; margin-right: 4px; }
+    select, input[type=text] { padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem; }
+    .toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
+    .toolbar form { display: flex; gap: 6px; margin-left: auto; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; color: #fff; font-weight: 600; }
+    .badge.success { background: #198754; }
+    .badge.warning { background: #ffc107; color: #212529; }
+    .badge.danger { background: #dc3545; }
+    .badge.secondary { background: #6c757d; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .dot.success { background: #198754; }
+    .dot.warning { background: #ffc107; }
+    .dot.danger { background: #dc3545; }
+    .table-wrap { overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #dee2e6; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+    thead th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #dee2e6; z-index: 1; }
+    tbody tr.datarow { cursor: pointer; }
+    tbody tr.datarow:hover { background: #f1f3f5; }
+    tr.detail td { background: #f8f9fa; white-space: normal; }
+    tr.hidden { display: none; }
+    .btn { padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.78rem; }
+    .btn:hover { background: #f1f3f5; }
+    .btn.danger { color: #dc3545; border-color: #dc3545; }
+    .btn.secondary { color: #495057; }
+    .alert { background: #f8d7da; color: #842029; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 8px; }
+    .muted { color: #6c757d; }
+    .small { font-size: 0.8rem; }
+    .mini-table { border-collapse: collapse; font-size: 0.78rem; }
+    .mini-table td, .mini-table th { padding: 2px 6px; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+    .footnote { color: #6c757d; font-size: 0.8rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+    <header>
+        <span class="title">Fusion Fleet Dashboard</span>
+        <span id="summaryBar"></span>
+        <div class="controls">
+            <span><label>Poll interval</label>
+                <select id="intervalSelect">
+                    <option value="15000">15s</option>
+                    <option value="30000">30s</option>
+                    <option value="60000">60s</option>
+                    <option value="120000">120s</option>
+                </select>
+            </span>
+            <span><label>Concurrency</label>
+                <select id="concurrencySelect">
+                    <option value="4">4</option>
+                    <option value="8">8</option>
+                    <option value="12">12</option>
+                    <option value="16">16</option>
+                </select>
+            </span>
+        </div>
+        <button class="btn" id="pollingToggleBtn">Pause polling</button>
+    </header>
+
+    <div class="toolbar">
+        <input type="text" id="filterInput" placeholder="Filter: IP, name or tag" style="width:220px">
+        <label class="small"><input type="checkbox" id="onlyProblemsCheck"> show only problems</label>
+        <form id="addDeviceForm">
+            <input type="text" id="newDeviceIp" placeholder="Device IP" required style="width:130px">
+            <input type="text" id="newDeviceName" placeholder="Name (optional)" style="width:150px">
+            <button type="submit" class="btn secondary">+ Device</button>
+        </form>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th></th><th>IP</th><th>Name</th><th>FW</th><th>Temp</th><th>PTP</th>
+                    <th>E1</th><th>E2</th><th>Warn</th><th>NMOS</th><th>Last poll</th><th></th>
+                </tr>
+            </thead>
+            <tbody id="deviceTableBody"></tbody>
+        </table>
+    </div>
+    <div class="footnote">Click a row to expand configuration details. Device list and settings are stored in this browser only (localStorage) - copy this single file to another PC to reuse it there; the list resets to the seeded fleet on that PC's first run.</div>
+
+<script>
+/**
+ * Fusion Fleet Dashboard - fully self-contained (no external files, works offline).
+ *
+ * Polling design notes (matters a lot at 100+ devices):
+ * - Health comes from one endpoint (/telemetry/node) instead of many small GETs.
+ * - Devices are polled through a concurrency-limited pool (default 8 in flight)
+ *   instead of firing all requests at once, so a large fleet never floods the
+ *   network with N simultaneous GETs.
+ * - A device is skipped for a cycle if its previous request hasn't finished yet.
+ * - A full poll cycle never overlaps itself.
+ * - Every request has a hard timeout via AbortController.
+ * - Polling pauses while the tab is hidden.
+ * - Config data (hostname, firmware, license, ports, NMOS) is fetched once on
+ *   load / on demand only - never on the recurring health poll.
+ */
+
+const REQUEST_TIMEOUT_MS = 4000;
+const CONFIG_TIMEOUT_MS = 5000;
+const DEVICES_KEY = "FusionDashboard_Devices";
+const INTERVAL_KEY = "FusionDashboard_IntervalMs";
+const CONCURRENCY_KEY = "FusionDashboard_Concurrency";
+const SEED_VERSION_KEY = "FusionDashboard_SeedVersion";
+const CURRENT_SEED_VERSION = "3";
+const DEFAULT_INTERVAL_MS = 30000;
+const DEFAULT_CONCURRENCY = 8;
+
+// Initial fleet seed (only applied once - see loadDevices()). After that,
+// the user's own add/remove edits in localStorage are authoritative.
+const DEFAULT_DEVICES = [
+        { ip: "10.101.2.74", tag: "C03FRMSDIGTW001", name: "CS3.IP/HI 01" },
+        { ip: "10.101.4.74", tag: "C03FRMSDIGTW002", name: "CS3.IP/HI 02" },
+        { ip: "10.101.6.74", tag: "C04FRMSDIGTW001", name: "CS4.IP/HI 01" },
+        { ip: "10.101.8.74", tag: "C04FRMSDIGTW002", name: "CS4.IP/HI 02" },
+        { ip: "10.101.10.74", tag: "C05FRMSDIGTW001", name: "CS5.IP/HI 01" },
+        { ip: "10.101.12.74", tag: "C05FRMSDIGTW002", name: "CS5.IP/HI 02" },
+        { ip: "10.101.4.158", tag: "C06FRMSDIGTW001", name: "CS6.IP/HI 01" },
+        { ip: "10.101.6.158", tag: "C06FRMSDIGTW002", name: "CS6.IP/HI 02" },
+        { ip: "10.101.8.158", tag: "C07FRMSDIGTW001", name: "CS7.IP/HI 01" },
+        { ip: "10.101.10.146", tag: "C07FRMSDIGTW002", name: "CS7.IP/HI 02" },
+        { ip: "10.101.10.150", tag: "C08FRMSDIGTW001", name: "CS8.IP/HI 01" },
+        { ip: "10.101.12.154", tag: "C08FRMSDIGTW002", name: "CS8.IP/HI 02" },
+        { ip: "10.101.10.78", tag: "C09FRMSDIGTW001", name: "CS9.IP/HI 01" },
+        { ip: "10.101.12.78", tag: "C09FRMSDIGTW002", name: "CS9.IP/HI 02" },
+        { ip: "10.101.14.78", tag: "C10FRMSDIGTW001", name: "CS10.IP/HI 01" },
+        { ip: "10.101.16.78", tag: "C10FRMSDIGTW002", name: "CS10.IP/HI 02" },
+        { ip: "10.101.2.90", tag: "C11FRMSDIGTW001", name: "CS11.IP/HI 01" },
+        { ip: "10.101.4.90", tag: "C11FRMSDIGTW002", name: "CS11.IP/HI 02" },
+        { ip: "10.101.6.90", tag: "C12FRMSDIGTW001", name: "CS12.IP/HI 01" },
+        { ip: "10.101.8.90", tag: "C12FRMSDIGTW002", name: "CS12.IP/HI 02" },
+        { ip: "10.101.10.90", tag: "C13FRMSDIGTW001", name: "CS13.IP/HI 01" },
+        { ip: "10.101.12.90", tag: "C13FRMSDIGTW002", name: "CS13.IP/HI 02" },
+        { ip: "10.101.14.90", tag: "C14FRMSDIGTW001", name: "CS14.IP/HI 01" },
+        { ip: "10.101.16.90", tag: "C14FRMSDIGTW002", name: "CS14.IP/HI 02" },
+        { ip: "10.101.2.94", tag: "C15FRMSDIGTW001", name: "CS15.IP/HI 01" },
+        { ip: "10.101.4.94", tag: "C15FRMSDIGTW002", name: "CS15.IP/HI 02" },
+        { ip: "10.101.6.94", tag: "C16FRMSDIGTW001", name: "CS16.IP/HI 01" },
+        { ip: "10.101.8.94", tag: "C16FRMSDIGTW002", name: "CS16.IP/HI 02" },
+        { ip: "10.101.10.94", tag: "C17FRMSDIGTW001", name: "CS17.IP/HI 01" },
+        { ip: "10.101.12.94", tag: "C17FRMSDIGTW002", name: "CS17.IP/HI 02" },
+        { ip: "10.101.14.94", tag: "C18FRMSDIGTW001", name: "CS18.IP/HI 01" },
+        { ip: "10.101.16.94", tag: "C18FRMSDIGTW002", name: "CS18.IP/HI 02" },
+        { ip: "10.101.2.98", tag: "C19FRMSDIGTW001", name: "CS19.IP/HI 01" },
+        { ip: "10.101.4.98", tag: "C19FRMSDIGTW002", name: "CS19.IP/HI 02" },
+        { ip: "10.101.6.98", tag: "C20FRMSDIGTW001", name: "CS20.IP/HI 01" },
+        { ip: "10.101.8.98", tag: "C20FRMSDIGTW002", name: "CS20.IP/HI 02" },
+        { ip: "10.101.10.98", tag: "C21FRMSDIGTW001", name: "CS21.IP/HI 01" },
+        { ip: "10.101.12.98", tag: "C21FRMSDIGTW002", name: "CS21.IP/HI 02" },
+        { ip: "10.101.14.98", tag: "C22FRMSDIGTW001", name: "CS22.IP/HI 01" },
+        { ip: "10.101.16.98", tag: "C22FRMSDIGTW002", name: "CS22.IP/HI 02" },
+        { ip: "10.101.2.102", tag: "C23FRMSDIGTW001", name: "CS23.IP/HI 01" },
+        { ip: "10.101.4.102", tag: "C23FRMSDIGTW002", name: "CS23.IP/HI 02" },
+        { ip: "10.101.6.102", tag: "C24FRMSDIGTW001", name: "CS24.IP/HI 01" },
+        { ip: "10.101.8.102", tag: "C24FRMSDIGTW002", name: "CS24.IP/HI 02" },
+        { ip: "10.101.10.102", tag: "C25FRMSDIGTW001", name: "CS25.IP/HI 01" },
+        { ip: "10.101.12.102", tag: "C25FRMSDIGTW002", name: "CS25.IP/HI 02" },
+        { ip: "10.101.14.102", tag: "C26FRMSDIGTW001", name: "CS26.IP/HI 01" },
+        { ip: "10.101.16.102", tag: "C26FRMSDIGTW002", name: "CS26.IP/HI 02" },
+        { ip: "10.101.2.106", tag: "C27FRMSDIGTW001", name: "CS27.IP/HI 01" },
+        { ip: "10.101.4.106", tag: "C27FRMSDIGTW002", name: "CS27.IP/HI 02" },
+        { ip: "10.101.6.106", tag: "C28FRMSDIGTW001", name: "CS28.IP/HI 01" },
+        { ip: "10.101.8.106", tag: "C28FRMSDIGTW002", name: "CS28.IP/HI 02" },
+        { ip: "10.101.10.106", tag: "C29FRMSDIGTW001", name: "CS29.IP/HI 01" },
+        { ip: "10.101.12.106", tag: "C29FRMSDIGTW002", name: "CS29.IP/HI 02" },
+        { ip: "10.101.14.106", tag: "C01FRMSDIGTW001", name: "CS1.IP/HI 01" },
+        { ip: "10.101.16.106", tag: "C01FRMSDIGTW002", name: "CS1.IP/HI 02" },
+        { ip: "10.101.2.110", tag: "C01FRMSDIGTW003", name: "CS1.IP/HI 03" },
+        { ip: "10.101.4.110", tag: "C02FRMSDIGTW001", name: "CS2.IP/HI 01" },
+        { ip: "10.101.6.110", tag: "C02FRMSDIGTW002", name: "CS2.IP/HI 02" },
+        { ip: "10.101.8.110", tag: "C02FRMSDIGTW003", name: "CS2.IP/HI 03" },
+        { ip: "10.101.12.182", tag: "DCRFRMSDIGTW001", name: "DCR.IP/HI 01" },
+        { ip: "10.101.14.182", tag: "DCBFRMSDIGTW001", name: "DCB.IP/HI 01" },
+        { ip: "10.101.12.146", tag: "DCRFRMSDIGTW002", name: "DCR.IP/HI 02" },
+        { ip: "10.101.12.150", tag: "DCBFRMSDIGTW002", name: "DCB.IP/HI 02" },
+        { ip: "10.101.10.110", tag: "PC1FRMSDIGTW001", name: "PCR1.IP/HI 01" },
+        { ip: "10.101.12.110", tag: "PC1FRMSDIGTW002", name: "PCR1.IP/HI 02" },
+        { ip: "10.101.14.110", tag: "PC1FRMSDIGTW003", name: "PCR1.IP/S 01" },
+        { ip: "10.101.16.110", tag: "PC1FRMSDIGTW004", name: "PCR1.IP/S 02" },
+        { ip: "10.101.2.114", tag: "PC1FRMSDIGTW005", name: "PCR1.IP/S 03" },
+        { ip: "10.101.4.114", tag: "SC1FRMSDIGTW001", name: "SCR1.IP/HI 01" },
+        { ip: "10.101.6.114", tag: "SC1FRMSDIGTW002", name: "SCR1.IP/HI 02" },
+        { ip: "10.101.8.114", tag: "PC2FRMSDIGTW001", name: "PCR2.IP/HI 01" },
+        { ip: "10.101.10.114", tag: "PC2FRMSDIGTW002", name: "PCR2.IP/HI 02" },
+        { ip: "10.101.12.114", tag: "PC2FRMSDIGTW003", name: "PCR2.IP/S 01" },
+        { ip: "10.101.14.114", tag: "GR2FRMSDIGTW004", name: "GR2.IP/HI.01" },
+        { ip: "10.101.16.114", tag: "PC3FRMSDIGTW001", name: "PCR3.IP/HI 01" },
+        { ip: "10.101.2.118", tag: "PC3FRMSDIGTW002", name: "PCR3.IP/HI 02" },
+        { ip: "10.101.4.118", tag: "PC3FRMSDIGTW003", name: "PCR3.IP/S 01" },
+        { ip: "10.101.6.118", tag: "AX2FRMSDIGTW001", name: "ASX2.IP/HI 01" },
+        { ip: "10.101.8.118", tag: "AX1FRMSDIGTW001", name: "ASX1.IP/HI 01" },
+        { ip: "10.101.10.118", tag: "AX1FRMSDIGTW002", name: "ASX1.IP/HI 02" },
+        { ip: "10.101.12.118", tag: "RLYFRMSDIGTW001", name: "REPLAY.IP/HI 01" },
+        { ip: "10.101.14.118", tag: "RLYFRMSDIGTW002", name: "REPLAY.IP/HI 02" },
+        { ip: "10.101.16.118", tag: "RLYFRMSDIGTW003", name: "REPLAY.IP/HI 03" },
+        { ip: "10.101.2.122", tag: "RLYFRMSDIGTW004", name: "REPLAY.IP/S 01" },
+        { ip: "10.101.4.122", tag: "RLYFRMSDIGTW005", name: "REPLAY.IP/S 02" },
+        { ip: "10.101.6.122", tag: "RLYFRMSDIGTW006", name: "REPLAY.IP/S 03" },
+        { ip: "10.101.8.122", tag: "RLYFRMSDIGTW007", name: "REPLAY.IP/S 04" },
+        { ip: "10.101.10.122", tag: "GFXFRMSDIGTW001", name: "GFX1.IP/HI 01" },
+        { ip: "10.101.12.122", tag: "GFXFRMSDIGTW002", name: "GFX1.IP/HI 02" },
+        { ip: "10.101.14.122", tag: "GFXFRMSDIGTW003", name: "GFX1.IP/HI 03" },
+        { ip: "10.101.16.122", tag: "GFXFRMSDIGTW004", name: "GFX1.IP/S 01" },
+        { ip: "10.101.2.126", tag: "GFXFRMSDIGTW005", name: "GFX1.IP/S 02" },
+        { ip: "10.101.4.126", tag: "GFXFRMSDIGTW006", name: "GFX1.IP/S 03" },
+        { ip: "10.101.6.126", tag: "MC1FRMSDIGTW001", name: "MC.IP/HI 01" },
+        { ip: "10.101.8.126", tag: "MC1FRMSDIGTW002", name: "MC.IP/S 01" },
+        { ip: "10.101.10.126", tag: "ST1FRMSDIGTW001", name: "ST1.IP/HI 01" },
+        { ip: "10.101.12.126", tag: "ST1FRMSDIGTW002", name: "ST1.IP/HI 02" },
+        { ip: "10.101.14.126", tag: "GR1FRMSDIGTW001", name: "GR1.IP/HI 01" },
+        { ip: "10.101.12.134", tag: "AX2FRMSDIGTW002", name: "ASX2.IP/HI 02" },
+        { ip: "10.101.14.74", tag: "OC1FRMSDIGTW001", name: "OC.IP/HI 01" },
+        { ip: "10.101.16.74", tag: "OC1FRMSDIGTW002", name: "OC.IP/HI 02" },
+        { ip: "10.101.2.78", tag: "OC1FRMSDIGTW003", name: "OC.IP/HI 03" },
+        { ip: "10.101.4.78", tag: "OC1FRMSDIGTW004", name: "OC.IP/HI 04" },
+        { ip: "10.101.6.78", tag: "OC1FRMSDIGTW005", name: "OC.IP/HI 05" },
+        { ip: "10.101.8.78", tag: "OC1FRMSDIGTW006", name: "OC.IP/HI 06" },
+        { ip: "10.101.12.158", tag: "OC1FRMSDIGTW007", name: "OC.IP/HI 07" }
+];
+
+let devices = [];
+let pollTimer = null;
+let cycleRunning = false;
+let filterText = "";
+let onlyProblems = false;
+
+function uid() { return "d" + Math.random().toString(36).slice(2, 10); }
+
+function loadDevices() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(DEVICES_KEY) || "null"); } catch (e) { raw = null; }
+    const seeded = localStorage.getItem(SEED_VERSION_KEY) === CURRENT_SEED_VERSION;
+    if (!seeded) {
+        devices = DEFAULT_DEVICES.map(d => ({ id: uid(), ip: d.ip, name: d.name, tag: d.tag }));
+        saveDevices();
+        localStorage.setItem(SEED_VERSION_KEY, CURRENT_SEED_VERSION);
+    } else {
+        devices = raw || [];
+    }
+}
+
+function saveDevices() {
+    const plain = devices.map(d => ({ id: d.id, ip: d.ip, name: d.name || "", tag: d.tag || "" }));
+    localStorage.setItem(DEVICES_KEY, JSON.stringify(plain));
+}
+
+function currentIntervalMs() { return parseInt(localStorage.getItem(INTERVAL_KEY) || DEFAULT_INTERVAL_MS, 10); }
+function setIntervalMs(ms) { localStorage.setItem(INTERVAL_KEY, String(ms)); scheduleNextCycle(); }
+function currentConcurrency() { return parseInt(localStorage.getItem(CONCURRENCY_KEY) || DEFAULT_CONCURRENCY, 10); }
+function setConcurrency(n) { localStorage.setItem(CONCURRENCY_KEY, String(n)); }
+
+/** Runs iteratorFn over items with at most `limit` in flight at once. */
+async function asyncPool(limit, items, iteratorFn) {
+    const executing = new Set();
+    const results = [];
+    for (const item of items) {
+        const p = Promise.resolve().then(() => iteratorFn(item));
+        results.push(p);
+        executing.add(p);
+        const clear = () => executing.delete(p);
+        p.then(clear, clear);
+        if (executing.size >= limit) await Promise.race(executing);
+    }
+    return Promise.allSettled(results);
+}
+
+async function apiGet(ip, path, timeoutMs) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch("http://" + ip + path, { signal: controller.signal, cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const ct = res.headers.get("content-type") || "";
+        return ct.includes("json") ? await res.json() : await res.text();
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+function addDevice(ip, name) {
+    ip = (ip || "").trim();
+    if (!ip) return;
+    const dev = { id: uid(), ip: ip, name: (name || "").trim(), tag: "" };
+    devices.push(dev);
+    saveDevices();
+    renderDeviceRow(dev);
+    renderSummary();
+    fetchDeviceConfig(dev);
+    pollDeviceHealth(dev);
+}
+
+function removeDevice(id) {
+    devices = devices.filter(d => d.id !== id);
+    saveDevices();
+    const row = document.getElementById("row-" + id);
+    const detail = document.getElementById("detail-" + id);
+    if (row) row.remove();
+    if (detail) detail.remove();
+    renderSummary();
+}
+
+async function pollDeviceHealth(dev) {
+    if (dev._inFlight) return;
+    dev._inFlight = true;
+    try {
+        const node = await apiGet(dev.ip, "/emsfp/node/v1/telemetry/node", REQUEST_TIMEOUT_MS);
+        let warnings = [];
+        try {
+            const warnIds = await apiGet(dev.ip, "/emsfp/node/v1/telemetry/warnings/", REQUEST_TIMEOUT_MS);
+            for (const wid of warnIds || []) {
+                const clean = String(wid).replace(/\/$/, "");
+                const w = await apiGet(dev.ip, "/emsfp/node/v1/telemetry/warnings/" + clean, REQUEST_TIMEOUT_MS);
+                if (w && w.warning) warnings = warnings.concat(w.warning);
+            }
+        } catch (e) { /* warnings are secondary; a failure here shouldn't mark the device offline */ }
+        dev.health = { node, warnings };
+        dev.status = warnings.length ? "warning" : "online";
+        dev.lastError = null;
+    } catch (e) {
+        dev.status = "offline";
+        dev.lastError = e.message || String(e);
+    } finally {
+        dev.lastPollAt = new Date();
+        dev._inFlight = false;
+        renderDeviceRow(dev);
+    }
+}
+
+async function fetchDeviceConfig(dev) {
+    dev._configLoading = true;
+    renderDeviceRow(dev);
+    const safe = p => apiGet(dev.ip, p, CONFIG_TIMEOUT_MS).catch(() => null);
+    try {
+        const [ipconfig, information, firmware, license, interfaces, nmos] = await Promise.all([
+            safe("/emsfp/node/v1/self/ipconfig"),
+            safe("/emsfp/node/v1/self/information"),
+            safe("/emsfp/node/v1/self/firmware"),
+            safe("/emsfp/node/v1/self/license"),
+            safe("/emsfp/node/v1/self/interfaces"),
+            safe("/emsfp/node/v1/self/diag/nmos")
+        ]);
+        let ports = [];
+        try {
+            const portList = await apiGet(dev.ip, "/emsfp/node/v1/port", CONFIG_TIMEOUT_MS);
+            for (const p of portList || []) {
+                const num = String(p).replace(/\/$/, "");
+                const detail = await safe("/emsfp/node/v1/port/" + num);
+                ports.push({ num, detail });
+            }
+        } catch (e) { /* port breakdown is optional detail */ }
+        dev.config = { ipconfig, information, firmware, license, interfaces, nmos, ports };
+        dev.configError = null;
+    } catch (e) {
+        dev.configError = e.message || String(e);
+    } finally {
+        dev.configFetchedAt = new Date();
+        dev._configLoading = false;
+        renderDeviceRow(dev);
+    }
+}
+
+let pollingPaused = false;
+
+function scheduleNextCycle() {
+    if (pollingPaused) return;
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(runPollCycle, currentIntervalMs());
+}
+
+async function runPollCycle() {
+    if (pollingPaused || document.hidden || cycleRunning) { scheduleNextCycle(); return; }
+    cycleRunning = true;
+    await asyncPool(currentConcurrency(), devices, pollDeviceHealth);
+    cycleRunning = false;
+    renderSummary();
+    scheduleNextCycle();
+}
+
+function togglePolling() {
+    pollingPaused = !pollingPaused;
+    const btn = document.getElementById("pollingToggleBtn");
+    btn.textContent = pollingPaused ? "Resume polling" : "Pause polling";
+    btn.style.color = pollingPaused ? "#dc3545" : "";
+    btn.style.borderColor = pollingPaused ? "#dc3545" : "";
+    if (pollingPaused) {
+        if (pollTimer) clearTimeout(pollTimer);
+    } else {
+        runPollCycle();
+    }
+}
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) runPollCycle(); });
+
+/* ---------------- Rendering ---------------- */
+
+function fmtTime(d) { return d ? d.toLocaleTimeString() : "-"; }
+function fmtBw(bytesPerSec) {
+    if (bytesPerSec === undefined || bytesPerSec === null) return "-";
+    return ((bytesPerSec * 8) / 1e6).toFixed(1) + " Mb/s";
+}
+function tempClass(t) {
+    if (t === undefined || t === null) return "muted";
+    if (t >= 80) return "";
+    return "";
+}
+function statusDot(status) {
+    const cls = status === "online" ? "success" : status === "warning" ? "warning" : "danger";
+    return `<span class="dot ${cls}"></span>`;
+}
+function licenseBadges(license) {
+    if (!license || !license.feature) return "";
+    return Object.entries(license.feature)
+        .map(([k, v]) => `<span class="badge ${v === "licensed" ? "secondary" : "secondary"}" style="opacity:${v === "licensed" ? 1 : 0.4}">${k}</span>`)
+        .join(" ");
+}
+function portsTable(ports) {
+    if (!ports || !ports.length) return '<span class="muted small">no data</span>';
+    const rows = ports.map(p => {
+        const d = p.detail || {};
+        return `<tr><td>P${p.num}</td><td>${d.link || "-"}</td><td>${d.host_pinout ?? "-"}</td><td>${d.detected_sfp_part_number || "-"}</td></tr>`;
+    }).join("");
+    return `<table class="mini-table"><thead><tr><th>Port</th><th>Link</th><th>Pinout</th><th>SFP</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function deviceMatchesFilter(dev) {
+    if (onlyProblems && dev.status === "online") return false;
+    if (!filterText) return true;
+    const hostname = (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "";
+    const haystack = (dev.ip + " " + (dev.name || "") + " " + (dev.tag || "") + " " + hostname).toLowerCase();
+    return haystack.includes(filterText);
+}
+
+function applyRowVisibility(dev) {
+    const match = deviceMatchesFilter(dev);
+    const row = document.getElementById("row-" + dev.id);
+    const detail = document.getElementById("detail-" + dev.id);
+    if (row) row.classList.toggle("hidden", !match);
+    if (detail && !match) detail.classList.add("hidden");
+}
+
+function toggleDetail(id) {
+    const detail = document.getElementById("detail-" + id);
+    if (detail) detail.classList.toggle("hidden");
+}
+
+function renderDeviceRow(dev) {
+    let row = document.getElementById("row-" + dev.id);
+    let detail = document.getElementById("detail-" + dev.id);
+    if (!row) {
+        const tbody = document.getElementById("deviceTableBody");
+        row = document.createElement("tr");
+        row.id = "row-" + dev.id;
+        row.className = "datarow";
+        detail = document.createElement("tr");
+        detail.id = "detail-" + dev.id;
+        detail.className = "detail hidden";
+        tbody.appendChild(row);
+        tbody.appendChild(detail);
+    }
+
+    const health = dev.health || {};
+    const node = health.node || {};
+    const hlt = node.health || {};
+    const refclk = node.refclk || {};
+    const ifs = node.interfaces || {};
+    const cfg = dev.config || {};
+    const liveHostname = cfg.ipconfig && cfg.ipconfig.hostname;
+    const displayName = liveHostname || dev.name || "-";
+    const fw = cfg.firmware && cfg.firmware.info ? cfg.firmware.info.find(f => f.active === "yes") : null;
+    const nmos = cfg.nmos || {};
+    const warnings = health.warnings || [];
+    const tempColor = hlt.core_temp >= 80 ? "#dc3545" : hlt.core_temp >= 70 ? "#c98a00" : "#198754";
+
+    row.onclick = (ev) => { if (ev.target.closest("button")) return; toggleDetail(dev.id); };
+    row.innerHTML = `
+      <td>${statusDot(dev.status || "offline")}</td>
+      <td style="font-family:monospace">${dev.ip}</td>
+      <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
+      <td>${fw ? fw.semantic_version : "-"}</td>
+      <td style="color:${tempColor};font-weight:600">${hlt.core_temp ?? "-"}&deg;C</td>
+      <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
+      <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
+      <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
+      <td>${warnings.length
+        ? `<span class="badge warning" title="${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`
+        : `<span class="badge success">OK</span>`}</td>
+      <td><span class="badge ${nmos.status === "connected" ? "success" : "secondary"}">${nmos.status || "-"}</span></td>
+      <td class="muted small">${fmtTime(dev.lastPollAt)}</td>
+      <td>
+        <button class="btn secondary" title="Reload config" onclick="fetchDeviceConfig(devices.find(d=>d.id==='${dev.id}'))">&#8635;</button>
+        <button class="btn danger" title="Remove" onclick="removeDevice('${dev.id}')">&times;</button>
+      </td>`;
+
+    detail.innerHTML = `
+      <td colspan="12">
+        ${dev.status === "offline" ? `<div class="alert">Unreachable${dev.lastError ? " (" + dev.lastError + ")" : ""}</div>` : ""}
+        <div style="display:flex; gap:24px; flex-wrap:wrap">
+          <div class="small" style="min-width:260px">
+            <div>Serial number: ${(cfg.information && cfg.information.serial_number) || "-"}</div>
+            <div>MAC: ${(cfg.ipconfig && cfg.ipconfig.local_mac) || "-"}</div>
+            <div>E1 IP: ${(cfg.interfaces && cfg.interfaces.e1 && cfg.interfaces.e1.current_ip) || "-"} (${(ifs.e1 && fmtBw(ifs.e1.rx_bw)) || "-"} rx)</div>
+            <div>E2 IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
+            <div>NMOS registry: ${nmos.registry_address || "-"}</div>
+            <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns, fan: ${hlt.fan_speed ?? "-"} rpm</div>
+            <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
+            <div class="muted small" style="margin-top:4px">Config loaded: ${fmtTime(dev.configFetchedAt)}${dev.configError ? " - error: " + dev.configError : ""}</div>
+          </div>
+          <div>${portsTable(cfg.ports)}</div>
+        </div>
+      </td>`;
+
+    applyRowVisibility(dev);
+}
+
+function renderSummary() {
+    const online = devices.filter(d => d.status === "online").length;
+    const warn = devices.filter(d => d.status === "warning").length;
+    const off = devices.filter(d => d.status === "offline").length;
+    const unknown = devices.length - online - warn - off;
+    document.getElementById("summaryBar").innerHTML =
+        `<span class="badge success">${online} online</span> ` +
+        `<span class="badge warning">${warn} warning</span> ` +
+        `<span class="badge danger">${off} offline</span> ` +
+        (unknown ? `<span class="badge secondary">${unknown} unknown</span> ` : "") +
+        `<span class="muted small">${devices.length} devices total</span>`;
+}
+
+function renderAll() {
+    document.getElementById("deviceTableBody").innerHTML = "";
+    devices.forEach(renderDeviceRow);
+    renderSummary();
+}
+
+function applyFilter() { devices.forEach(applyRowVisibility); }
+
+function startDashboard() {
+    loadDevices();
+
+    const intervalSel = document.getElementById("intervalSelect");
+    intervalSel.value = String(currentIntervalMs());
+    intervalSel.addEventListener("change", () => setIntervalMs(parseInt(intervalSel.value, 10)));
+
+    const concurrencySel = document.getElementById("concurrencySelect");
+    concurrencySel.value = String(currentConcurrency());
+    concurrencySel.addEventListener("change", () => setConcurrency(parseInt(concurrencySel.value, 10)));
+
+    document.getElementById("pollingToggleBtn").addEventListener("click", togglePolling);
+
+    document.getElementById("filterInput").addEventListener("input", (ev) => {
+        filterText = ev.target.value.trim().toLowerCase();
+        applyFilter();
+    });
+    document.getElementById("onlyProblemsCheck").addEventListener("change", (ev) => {
+        onlyProblems = ev.target.checked;
+        applyFilter();
+    });
+
+    renderAll();
+    asyncPool(currentConcurrency(), devices, fetchDeviceConfig);
+    runPollCycle();
+
+    document.getElementById("addDeviceForm").addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        addDevice(document.getElementById("newDeviceIp").value, document.getElementById("newDeviceName").value);
+        ev.target.reset();
+    });
+}
+
+startDashboard();
+</script>
+</body>
+</html>

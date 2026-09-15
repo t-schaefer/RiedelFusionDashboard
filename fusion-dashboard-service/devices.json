@@ -1,0 +1,537 @@
+[
+  {
+    "ip": "10.101.2.74",
+    "tag": "C03FRMSDIGTW001",
+    "name": "CS3.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.74",
+    "tag": "C03FRMSDIGTW002",
+    "name": "CS3.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.74",
+    "tag": "C04FRMSDIGTW001",
+    "name": "CS4.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.74",
+    "tag": "C04FRMSDIGTW002",
+    "name": "CS4.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.74",
+    "tag": "C05FRMSDIGTW001",
+    "name": "CS5.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.74",
+    "tag": "C05FRMSDIGTW002",
+    "name": "CS5.IP/HI 02"
+  },
+  {
+    "ip": "10.101.4.158",
+    "tag": "C06FRMSDIGTW001",
+    "name": "CS6.IP/HI 01"
+  },
+  {
+    "ip": "10.101.6.158",
+    "tag": "C06FRMSDIGTW002",
+    "name": "CS6.IP/HI 02"
+  },
+  {
+    "ip": "10.101.8.158",
+    "tag": "C07FRMSDIGTW001",
+    "name": "CS7.IP/HI 01"
+  },
+  {
+    "ip": "10.101.10.146",
+    "tag": "C07FRMSDIGTW002",
+    "name": "CS7.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.150",
+    "tag": "C08FRMSDIGTW001",
+    "name": "CS8.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.154",
+    "tag": "C08FRMSDIGTW002",
+    "name": "CS8.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.78",
+    "tag": "C09FRMSDIGTW001",
+    "name": "CS9.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.78",
+    "tag": "C09FRMSDIGTW002",
+    "name": "CS9.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.78",
+    "tag": "C10FRMSDIGTW001",
+    "name": "CS10.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.78",
+    "tag": "C10FRMSDIGTW002",
+    "name": "CS10.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.90",
+    "tag": "C11FRMSDIGTW001",
+    "name": "CS11.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.90",
+    "tag": "C11FRMSDIGTW002",
+    "name": "CS11.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.90",
+    "tag": "C12FRMSDIGTW001",
+    "name": "CS12.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.90",
+    "tag": "C12FRMSDIGTW002",
+    "name": "CS12.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.90",
+    "tag": "C13FRMSDIGTW001",
+    "name": "CS13.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.90",
+    "tag": "C13FRMSDIGTW002",
+    "name": "CS13.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.90",
+    "tag": "C14FRMSDIGTW001",
+    "name": "CS14.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.90",
+    "tag": "C14FRMSDIGTW002",
+    "name": "CS14.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.94",
+    "tag": "C15FRMSDIGTW001",
+    "name": "CS15.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.94",
+    "tag": "C15FRMSDIGTW002",
+    "name": "CS15.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.94",
+    "tag": "C16FRMSDIGTW001",
+    "name": "CS16.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.94",
+    "tag": "C16FRMSDIGTW002",
+    "name": "CS16.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.94",
+    "tag": "C17FRMSDIGTW001",
+    "name": "CS17.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.94",
+    "tag": "C17FRMSDIGTW002",
+    "name": "CS17.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.94",
+    "tag": "C18FRMSDIGTW001",
+    "name": "CS18.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.94",
+    "tag": "C18FRMSDIGTW002",
+    "name": "CS18.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.98",
+    "tag": "C19FRMSDIGTW001",
+    "name": "CS19.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.98",
+    "tag": "C19FRMSDIGTW002",
+    "name": "CS19.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.98",
+    "tag": "C20FRMSDIGTW001",
+    "name": "CS20.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.98",
+    "tag": "C20FRMSDIGTW002",
+    "name": "CS20.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.98",
+    "tag": "C21FRMSDIGTW001",
+    "name": "CS21.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.98",
+    "tag": "C21FRMSDIGTW002",
+    "name": "CS21.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.98",
+    "tag": "C22FRMSDIGTW001",
+    "name": "CS22.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.98",
+    "tag": "C22FRMSDIGTW002",
+    "name": "CS22.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.102",
+    "tag": "C23FRMSDIGTW001",
+    "name": "CS23.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.102",
+    "tag": "C23FRMSDIGTW002",
+    "name": "CS23.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.102",
+    "tag": "C24FRMSDIGTW001",
+    "name": "CS24.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.102",
+    "tag": "C24FRMSDIGTW002",
+    "name": "CS24.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.102",
+    "tag": "C25FRMSDIGTW001",
+    "name": "CS25.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.102",
+    "tag": "C25FRMSDIGTW002",
+    "name": "CS25.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.102",
+    "tag": "C26FRMSDIGTW001",
+    "name": "CS26.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.102",
+    "tag": "C26FRMSDIGTW002",
+    "name": "CS26.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.106",
+    "tag": "C27FRMSDIGTW001",
+    "name": "CS27.IP/HI 01"
+  },
+  {
+    "ip": "10.101.4.106",
+    "tag": "C27FRMSDIGTW002",
+    "name": "CS27.IP/HI 02"
+  },
+  {
+    "ip": "10.101.6.106",
+    "tag": "C28FRMSDIGTW001",
+    "name": "CS28.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.106",
+    "tag": "C28FRMSDIGTW002",
+    "name": "CS28.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.106",
+    "tag": "C29FRMSDIGTW001",
+    "name": "CS29.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.106",
+    "tag": "C29FRMSDIGTW002",
+    "name": "CS29.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.106",
+    "tag": "C01FRMSDIGTW001",
+    "name": "CS1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.106",
+    "tag": "C01FRMSDIGTW002",
+    "name": "CS1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.110",
+    "tag": "C01FRMSDIGTW003",
+    "name": "CS1.IP/HI 03"
+  },
+  {
+    "ip": "10.101.4.110",
+    "tag": "C02FRMSDIGTW001",
+    "name": "CS2.IP/HI 01"
+  },
+  {
+    "ip": "10.101.6.110",
+    "tag": "C02FRMSDIGTW002",
+    "name": "CS2.IP/HI 02"
+  },
+  {
+    "ip": "10.101.8.110",
+    "tag": "C02FRMSDIGTW003",
+    "name": "CS2.IP/HI 03"
+  },
+  {
+    "ip": "10.101.12.182",
+    "tag": "DCRFRMSDIGTW001",
+    "name": "DCR.IP/HI 01"
+  },
+  {
+    "ip": "10.101.14.182",
+    "tag": "DCBFRMSDIGTW001",
+    "name": "DCB.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.146",
+    "tag": "DCRFRMSDIGTW002",
+    "name": "DCR.IP/HI 02"
+  },
+  {
+    "ip": "10.101.12.150",
+    "tag": "DCBFRMSDIGTW002",
+    "name": "DCB.IP/HI 02"
+  },
+  {
+    "ip": "10.101.10.110",
+    "tag": "PC1FRMSDIGTW001",
+    "name": "PCR1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.110",
+    "tag": "PC1FRMSDIGTW002",
+    "name": "PCR1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.110",
+    "tag": "PC1FRMSDIGTW003",
+    "name": "PCR1.IP/S 01"
+  },
+  {
+    "ip": "10.101.16.110",
+    "tag": "PC1FRMSDIGTW004",
+    "name": "PCR1.IP/S 02"
+  },
+  {
+    "ip": "10.101.2.114",
+    "tag": "PC1FRMSDIGTW005",
+    "name": "PCR1.IP/S 03"
+  },
+  {
+    "ip": "10.101.4.114",
+    "tag": "SC1FRMSDIGTW001",
+    "name": "SCR1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.6.114",
+    "tag": "SC1FRMSDIGTW002",
+    "name": "SCR1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.8.114",
+    "tag": "PC2FRMSDIGTW001",
+    "name": "PCR2.IP/HI 01"
+  },
+  {
+    "ip": "10.101.10.114",
+    "tag": "PC2FRMSDIGTW002",
+    "name": "PCR2.IP/HI 02"
+  },
+  {
+    "ip": "10.101.12.114",
+    "tag": "PC2FRMSDIGTW003",
+    "name": "PCR2.IP/S 01"
+  },
+  {
+    "ip": "10.101.14.114",
+    "tag": "GR2FRMSDIGTW004",
+    "name": "GR2.IP/HI.01"
+  },
+  {
+    "ip": "10.101.16.114",
+    "tag": "PC3FRMSDIGTW001",
+    "name": "PCR3.IP/HI 01"
+  },
+  {
+    "ip": "10.101.2.118",
+    "tag": "PC3FRMSDIGTW002",
+    "name": "PCR3.IP/HI 02"
+  },
+  {
+    "ip": "10.101.4.118",
+    "tag": "PC3FRMSDIGTW003",
+    "name": "PCR3.IP/S 01"
+  },
+  {
+    "ip": "10.101.6.118",
+    "tag": "AX2FRMSDIGTW001",
+    "name": "ASX2.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.118",
+    "tag": "AX1FRMSDIGTW001",
+    "name": "ASX1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.10.118",
+    "tag": "AX1FRMSDIGTW002",
+    "name": "ASX1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.12.118",
+    "tag": "RLYFRMSDIGTW001",
+    "name": "REPLAY.IP/HI 01"
+  },
+  {
+    "ip": "10.101.14.118",
+    "tag": "RLYFRMSDIGTW002",
+    "name": "REPLAY.IP/HI 02"
+  },
+  {
+    "ip": "10.101.16.118",
+    "tag": "RLYFRMSDIGTW003",
+    "name": "REPLAY.IP/HI 03"
+  },
+  {
+    "ip": "10.101.2.122",
+    "tag": "RLYFRMSDIGTW004",
+    "name": "REPLAY.IP/S 01"
+  },
+  {
+    "ip": "10.101.4.122",
+    "tag": "RLYFRMSDIGTW005",
+    "name": "REPLAY.IP/S 02"
+  },
+  {
+    "ip": "10.101.6.122",
+    "tag": "RLYFRMSDIGTW006",
+    "name": "REPLAY.IP/S 03"
+  },
+  {
+    "ip": "10.101.8.122",
+    "tag": "RLYFRMSDIGTW007",
+    "name": "REPLAY.IP/S 04"
+  },
+  {
+    "ip": "10.101.10.122",
+    "tag": "GFXFRMSDIGTW001",
+    "name": "GFX1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.122",
+    "tag": "GFXFRMSDIGTW002",
+    "name": "GFX1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.122",
+    "tag": "GFXFRMSDIGTW003",
+    "name": "GFX1.IP/HI 03"
+  },
+  {
+    "ip": "10.101.16.122",
+    "tag": "GFXFRMSDIGTW004",
+    "name": "GFX1.IP/S 01"
+  },
+  {
+    "ip": "10.101.2.126",
+    "tag": "GFXFRMSDIGTW005",
+    "name": "GFX1.IP/S 02"
+  },
+  {
+    "ip": "10.101.4.126",
+    "tag": "GFXFRMSDIGTW006",
+    "name": "GFX1.IP/S 03"
+  },
+  {
+    "ip": "10.101.6.126",
+    "tag": "MC1FRMSDIGTW001",
+    "name": "MC.IP/HI 01"
+  },
+  {
+    "ip": "10.101.8.126",
+    "tag": "MC1FRMSDIGTW002",
+    "name": "MC.IP/S 01"
+  },
+  {
+    "ip": "10.101.10.126",
+    "tag": "ST1FRMSDIGTW001",
+    "name": "ST1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.126",
+    "tag": "ST1FRMSDIGTW002",
+    "name": "ST1.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.126",
+    "tag": "GR1FRMSDIGTW001",
+    "name": "GR1.IP/HI 01"
+  },
+  {
+    "ip": "10.101.12.134",
+    "tag": "AX2FRMSDIGTW002",
+    "name": "ASX2.IP/HI 02"
+  },
+  {
+    "ip": "10.101.14.74",
+    "tag": "OC1FRMSDIGTW001",
+    "name": "OC.IP/HI 01"
+  },
+  {
+    "ip": "10.101.16.74",
+    "tag": "OC1FRMSDIGTW002",
+    "name": "OC.IP/HI 02"
+  },
+  {
+    "ip": "10.101.2.78",
+    "tag": "OC1FRMSDIGTW003",
+    "name": "OC.IP/HI 03"
+  },
+  {
+    "ip": "10.101.4.78",
+    "tag": "OC1FRMSDIGTW004",
+    "name": "OC.IP/HI 04"
+  },
+  {
+    "ip": "10.101.6.78",
+    "tag": "OC1FRMSDIGTW005",
+    "name": "OC.IP/HI 05"
+  },
+  {
+    "ip": "10.101.8.78",
+    "tag": "OC1FRMSDIGTW006",
+    "name": "OC.IP/HI 06"
+  },
+  {
+    "ip": "10.101.12.158",
+    "tag": "OC1FRMSDIGTW007",
+    "name": "OC.IP/HI 07"
+  }
+]

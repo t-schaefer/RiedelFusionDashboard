@@ -1,0 +1,614 @@
+{
+  "$schema_note": "Reverse-engineered/documented REST API for Nevion/Macnica 'Fusion' ST2110 UHD transceiver devices (emSFP platform). Compiled from js/fusionFunctions.js and js/flowEditorFunctions.js plus live exploration of a production device (self-describing API: any collection path without a trailing ID returns the list of its children).",
+  "device_family": {
+    "vendor": "Macnica (Nevion emSFP platform)",
+    "product_line": "MN-FusioN-6-B (ST2110 UHD Transceiver, 6x SDI <-> ST2110)",
+    "management": "NMOS IS-04/IS-05 capable, plus this proprietary REST API",
+    "example_device": {
+      "hostname": "CS6.IP/HI 01",
+      "serial_number": "126031200127",
+      "firmware": "4.8.1",
+      "verified_against_ip": "10.102.4.158",
+      "verified_on": "2026-09-15"
+    }
+  },
+  "base_url": "http://<device-ip>/emsfp/node/v1",
+  "transport_notes": {
+    "content_type": "application/json (requests sent as raw JSON string body via JSON.stringify, not form-encoded)",
+    "cors": "Access-Control-Allow-Origin: * ; Allow-Methods: GET, PUT, POST, PATCH, HEAD, OPTIONS, DELETE",
+    "quirk": "POST responses are sometimes non-JSON (plain text 'ok') or trigger a CORS-classified failure in the browser even though the write succeeded server-side. Client code treats xhr failure with responseText 'ok' as success.",
+    "self_describing": "GET on any collection path without an ID (e.g. /flows/, /sdi_output/) returns a JSON array of child IDs/paths, which can be fetched individually. GET on a bare container path (e.g. /self/, /self/diag/) returns an array of sub-resource names."
+  },
+  "discovery_tree": {
+    "description": "Result of GET on every path with no ID, giving the full known resource tree as of the verification date.",
+    "/emsfp/": ["node/"],
+    "/emsfp/node/": ["v1/"],
+    "/emsfp/node/v1/": ["self/", "port/", "flows/", "sources/", "receivers/", "senders/", "route/", "devices/", "sdi/", "sdi_output/", "sdi_input/", "sdi_audio/", "sdp/", "receivers_sdp/", "senders_sdp/", "clean_switch/", "refclk/", "lldp/", "telemetry/"],
+    "/emsfp/node/v1/self/": ["information/", "diag/", "firmware/", "phy/", "interfaces/", "ipconfig/", "static_route/", "license/", "system/", "syslog/", "protocols/"],
+    "/emsfp/node/v1/self/diag/": ["common/", "firmware/", "dns/", "flow/", "packet_interval_time/", "devices/", "2110-7_engine/", "refclk/", "nmos/"],
+    "/emsfp/node/v1/route/": ["bulk/"],
+    "/emsfp/node/v1/route/bulk/": ["sender/", "receiver/"],
+    "/emsfp/node/v1/telemetry/": ["node/", "ports/", "devices/", "warnings/"]
+  },
+  "endpoints": [
+    {
+      "path": "/self/ipconfig",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getHostname(), setHostname()",
+      "description": "Device network identity / hostname configuration.",
+      "response_sample": {
+        "version": "1",
+        "local_mac": "40:a3:6b:a2:2e:bc",
+        "ip_addr": "10.101.4.158",
+        "subnet_mask": "255.255.255.252",
+        "gateway": "10.101.4.157",
+        "hostname": "CS6.IP/HI 01",
+        "port": "80",
+        "dhcp_enable": "0",
+        "ctl_vlan_id": "0",
+        "ctl_vlan_pcp": "0",
+        "ctl_vlan_enable": "0",
+        "data_vlan_id": "0",
+        "data_vlan_enable": "0",
+        "bootstatus1": "060",
+        "bootstatus2": "000"
+      },
+      "post_body_sample": { "hostname": "New Device Name" }
+    },
+    {
+      "path": "/self/firmware",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getDeviceInfos()",
+      "description": "Installed firmware slots/images; which one is active vs default.",
+      "response_sample": {
+        "info": [
+          { "slot": 1, "product_id": 22, "desc": "MN-FusioN-6-B-APP-25-2110-SDI-2R6T-N", "version": "4.8.1758296127", "semantic_version": "4.8.1", "active": "yes", "default": "yes", "valid": "yes" },
+          { "slot": 2, "product_id": 0, "desc": "", "version": "", "semantic_version": "", "active": "no", "default": "no", "valid": "no" },
+          { "slot": 3, "product_id": 22, "desc": "MN-FusioN-6-B-APP-25-2110-SDI-6R2T-N", "version": "4.8.1758296243", "semantic_version": "4.8.1", "active": "no", "default": "no", "valid": "yes" }
+        ]
+      }
+    },
+    {
+      "path": "/self/system",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSystemInfo()",
+      "description": "Core system status: temperature, uptime, fan, IGMP version, flex port mode.",
+      "response_sample": {
+        "reboot": "0", "config_reset": "0", "counters_reset": "0", "flex_port_mode": "RT",
+        "access_control": { "media": { "device_management": true } },
+        "core_temp": 64, "core_voltage": 673,
+        "uptime": "17 days, 13:33:00", "current_time": "2026-09-15 08:15:10", "time_offset": "00:00:00",
+        "fan_speed": 5320, "min_fan_speed": 60,
+        "smpte_network": { "2022-7": { "class": "d" } },
+        "igmp": { "version": 3 }
+      }
+    },
+    {
+      "path": "/self/license",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getLicense()",
+      "description": "Licensed feature flags.",
+      "response_sample": { "feature": { "clean_switch": "licensed", "frame_sync": "licensed", "black_burst": "licensed", "uhd_support": "licensed" } }
+    },
+    {
+      "path": "/self/information",
+      "methods": ["GET"],
+      "source": "discovered (not in fusionFunctions.js)",
+      "description": "Hardware/ASIC/bootloader identity, serial number, supported link speeds, media capabilities.",
+      "response_sample": {
+        "bootloader_version": "1.1.0", "current_version": "0x68cd783f", "emsfp_version": "Axxx",
+        "asic_version": "0xa360e27f", "sw_sha1": "0x2181467c", "type": "22 - ST2110 UHD Transceiver",
+        "asic_slot_00": "0x68cd783f", "asic_slot_01": "0xffffffff", "asic_slot_02": "0x68cd78b3",
+        "platform_hw_version": "400", "base_hw_version": "4", "base_type": "FusioN6",
+        "serial_number": "126031200127",
+        "current_link_speed": { "e1": "25G", "e2": "25G" },
+        "supported_link_speeds": { "e1": ["25G"], "e2": ["25G"] },
+        "management_type": "NMOS", "product_id": 22, "encap_count": 2, "decap_count": 6,
+        "input_media": ["st2110", "sdi"], "output_media": ["st2110", "sdi"]
+      }
+    },
+    {
+      "path": "/self/phy",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Physical-layer FEC configuration per network interface.",
+      "response_sample": { "e1": { "fec": { "scheme": "rs", "commit": false } }, "e2": { "fec": { "scheme": "rs", "commit": false } } }
+    },
+    {
+      "path": "/self/interfaces",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getInterfaces(), setNetworkConfig()",
+      "description": "e1/e2 (and oob) network interface IP configuration.",
+      "response_sample": {
+        "e1": { "static_ip": "10.101.4.158/30", "static_gateway": "10.101.4.157", "current_ip": "10.101.4.158/30", "current_gateway": "10.101.4.157", "mac_address": "40:a3:6b:a2:2e:bc", "dhcp": false, "vlan": 0 },
+        "e2": { "static_ip": "10.102.4.158/30", "static_gateway": "10.102.4.157", "current_ip": "10.102.4.158/30", "current_gateway": "10.102.4.157", "mac_address": "40:a3:6b:a2:2e:bd", "dhcp": false, "vlan": 0 },
+        "oob": { "static_ip": "11.162.46.188/8", "static_gateway": "11.160.1.2", "current_ip": "0.0.0.0/32", "current_gateway": "0.0.0.0", "mac_address": "40:a3:6b:a2:2e:be", "dhcp": false, "vlan": 0 }
+      },
+      "post_body_sample": {
+        "e1": { "static_ip": "10.101.4.158/30", "static_gateway": "10.101.4.157", "dhcp": false, "vlan": 0 },
+        "e2": { "static_ip": "10.102.4.158/30", "static_gateway": "10.102.4.157", "dhcp": false, "vlan": 0 }
+      }
+    },
+    {
+      "path": "/self/static_route",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Up to 5 static route slots.",
+      "response_sample": { "route_1": { "destination": "0.0.0.0/0", "gateway": "0.0.0.0" }, "route_2": { "destination": "0.0.0.0/0", "gateway": "0.0.0.0" } }
+    },
+    {
+      "path": "/self/syslog",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Remote syslog server config plus granular per-category event monitoring toggles.",
+      "response_sample": {
+        "config": { "server": "10.12.64.24", "port": 514, "enable": true },
+        "monitoring": {
+          "common": { "ptp_event": true, "temp_event": true, "northbound_api_event": false, "rtp_timestamp_audio_event": false, "fan_speed": false },
+          "encap": { "sdi_event": false, "no_signal": false },
+          "decap": { "output_flywheel": true, "memory_pkt_error": true, "dash7_fifo_error": true, "flow_impairment": true, "frame_repeat": true, "frame_skipped": true }
+        }
+      }
+    },
+    {
+      "path": "/self/protocols",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "SAP/mDNS announcement toggles.",
+      "response_sample": { "sap_announcement_enable": "0", "mdns_enable": "0" }
+    },
+    {
+      "path": "/self/diag/refclk",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getDiagRefclk()",
+      "description": "PTP reference clock diagnostics: lock status, offsets, counters.",
+      "response_sample": {
+        "api_info": { "api_version_number": "1" }, "selected_uuid": "f3807dac-985d-11e5-8994-feff819cdc9f",
+        "status": "3", "48khz_ctl": "0", "48khz_status": "02", "90khz_ctl": "0", "90khz_status": "02",
+        "delay_req_destination": "224.0.1.129", "refclk_master_ip": "10.101.4.157",
+        "offset_from_master": -10, "mean_delay": 3665,
+        "events": { "coarse_unlock": false, "unlock": false, "sync_seq": "0x0" },
+        "counters": { "sync_counter": 12093820, "follow_up_counter": 12093818, "delay_request_counter": 10318388, "delay_response_counter": 10318386, "dropped_follow_sync_counter": 11, "dropped_delay_response_counter": 205, "reset": 0 }
+      }
+    },
+    {
+      "path": "/self/diag/nmos",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getNmosDiag(), setNmosRegMode(), setNmosRegAdr(), setNmosSettings()",
+      "description": "NMOS registration status and settings (registry mode/address, DNS, mDNS).",
+      "response_sample": {
+        "status": "connected", "current_registry": "10.12.81.11:8080", "registry_address": "10.12.81.11:8080",
+        "registry_address_2": "0.0.0.0:0", "uptime": 580399, "connection_count": 59,
+        "registry_mode": "manual", "dns_registry_service": "_nmos-register._tcp.dns.nmos.tv",
+        "mdns_mode": false, "dns_server_address": "0.0.0.0", "dns_server_addresses": [],
+        "manual_dns_server_address": "0.0.0.0", "domain_name": "",
+        "device_visible": [true, true, true, true, true, true, true, true], "control_network": "media"
+      },
+      "post_body_sample": { "registry_mode": "manual", "registry_address": "10.12.81.11:8080", "domain_name": "", "manual_dns_server_address": "0.0.0.0" }
+    },
+    {
+      "path": "/self/diag/common",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Network stack diagnostics/counters and ASIC reset control point.",
+      "response_sample": {
+        "api_info": { "api_version_number": "1" },
+        "asic": { "asic_reset": "0" },
+        "network": { "mac": "40:a3:6b:a2:2e:bc", "active_ip": "10.101.4.158", "active_subnet": "255.255.255.252", "active_gateway": "10.101.4.157", "hostname": "CS6.IP/HI 01", "dhcp_enable": "0", "vlan_id": "0", "vlan_enable": "0" },
+        "stats": { "ipv4_packet_drop": "0", "ipv4_rx_packet_count": "261729911", "ipv4_tx_packet_count": "159532215", "video_bandwidth_usage": "good" },
+        "config": { "commit": "0", "reset": "0" }
+      }
+    },
+    {
+      "path": "/self/diag/firmware",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Firmware diagnostics container (minimal payload observed).",
+      "response_sample": { "api_info": { "api_version_number": "1" } }
+    },
+    {
+      "path": "/self/diag/dns",
+      "methods": ["GET", "POST (likely, for lookup)"],
+      "source": "discovered",
+      "description": "DNS server config plus an on-device lookup tool (host/name/address fields suggest write-a-hostname-to-trigger-a-lookup pattern, unconfirmed).",
+      "response_sample": { "dns": { "server_address": "0.0.0.0", "domain_name": "" }, "lookup": { "host": "", "name": "", "address": "" } }
+    },
+    {
+      "path": "/self/diag/flow/{flow_id}",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Per-flow diagnostic detail (collection lists same IDs as /flows/).",
+      "response_sample": "not individually captured; collection returns same UUID list as /flows/"
+    },
+    {
+      "path": "/self/diag/packet_interval_time",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Inter-packet arrival time / jitter stats.",
+      "response_sample": [ { "flow_uuid": "", "network_index": 0, "min": "n/a", "max": "n/a", "avg": "n/a", "packet_rate": "n/a" } ]
+    },
+    {
+      "path": "/self/diag/devices/{device_id}",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Per logical-device (channel) diagnostics; collection lists the 8 device UUIDs, same as /devices/.",
+      "response_sample": "not individually captured"
+    },
+    {
+      "path": "/self/diag/2110-7_engine/{flow_id}",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "ST2110-7 (seamless redundancy) engine diagnostics per flow.",
+      "response_sample": "not individually captured; collection lists a subset of flow UUIDs (one per redundancy engine)"
+    },
+    {
+      "path": "/refclk/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getClock()",
+      "description": "PTP clock overview: which of the two configured clock instances is selected/locked.",
+      "response_sample": {
+        "mode": "0", "server_mode": "0", "status": "3", "locked_interface": "e1", "sync_mode_two_step": true,
+        "manual_ctrl": "0", "delay_req": -3, "announceReceiptTimeout": 3, "ttl": 1,
+        "selected_uuid": "f3807dac-985d-11e5-8994-feff819cdc9f",
+        "uuid": ["f2807dac-985d-11e5-8994-feff819cdc9f", "f3807dac-985d-11e5-8994-feff819cdc9f"]
+      }
+    },
+    {
+      "path": "/refclk/{uuid}",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getClock(), setClock()",
+      "description": "Individual PTP clock instance: domain number, grandmaster/clock IDs.",
+      "response_sample": {
+        "api_info": { "api_version_number": "1" }, "id": "f3807dac-985d-11e5-8994-feff819cdc9f",
+        "master_version": "2", "present": "1", "domain_num": "127", "vlan_id": "0", "dscp": "46",
+        "grandmaster_id": "ec-46-70-ff-fe-0a-ca-8c", "clock_id": "c4-ca-2b-ff-ff-ff-eb-7a", "server_mode": "0"
+      },
+      "post_body_sample": { "domain_num": "127" }
+    },
+    {
+      "path": "/lldp",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getLLDPinfo()",
+      "description": "LLDP neighbor discovery per physical interface.",
+      "response_sample": {
+        "configuration": { "rate": "45", "untag": true, "enable_rx": "1" },
+        "neighbor": [ { "interface": 1, "chassis": "c4:ca:2b:ff:eb:7a", "port": "Ethernet4/22/4", "ttl": "120" } ]
+      }
+    },
+    {
+      "path": "/port",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getPortInfo()",
+      "description": "List of physical SFP port numbers (1-6).",
+      "response_sample": ["1/", "2/", "3/", "4/", "5/", "6/"]
+    },
+    {
+      "path": "/port/{n}",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getPortInfo(), setPort1(), setPort2()",
+      "description": "Per-SFP-port link/DDM (digital diagnostic monitoring) info and pinout mode. host_pinout is settable only on ports 1-2 in the UI (RT/2T/2R modes) though the field is present on all ports.",
+      "response_sample": {
+        "link": "up", "capabilities": "25Gbps, 10Gbps", "speed": "25Gbps",
+        "sfp_type_capabilities": "msa, n-msa", "sfp_type": "auto", "detected_sfp_type": "n-msa",
+        "detected_sfp_part_number": "1913047", "detected_sfp_serial_number": "225110400380", "host_pinout": "2T",
+        "sfp_ddm_info": {
+          "temperature": { "high_alarm": 85.0, "low_alarm": -40.0, "high_warning": 80.0, "low_warning": -35.0, "current": 39.0 },
+          "vcc": { "high_alarm": 3.6, "low_alarm": 3.0, "high_warning": 3.47, "low_warning": 3.14, "current": 3.312 },
+          "tx_bias": { "current": 0.0 }, "tx_power": { "current": 0 }, "rx_power": { "current": 0 },
+          "alarm_status": { "high_temperature": false, "low_temperature": false, "high_vcc": false, "low_vcc": false, "high_tx_bias": false, "low_tx_bias": false, "high_tx_power": false, "low_tx_power": false, "high_rx_power": false, "low_rx_power": false },
+          "warning_status": { "high_temperature": false, "low_temperature": false, "high_vcc": false, "low_vcc": false, "high_tx_bias": false, "low_tx_bias": false, "high_tx_power": false, "low_tx_power": false, "high_rx_power": false, "low_rx_power": false }
+        }
+      },
+      "post_body_sample": { "host_pinout": "2T" },
+      "valid_host_pinout_values": ["0", "2T", "2R", "RT"]
+    },
+    {
+      "path": "/sdi",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getOperatingBitrate(), setBitrate()",
+      "description": "Global SDI operating bitrate configuration.",
+      "response_sample": { "configuration": { "operating_bit_rate": "integer" }, "running_operating_bit_rate": "integer" },
+      "post_body_sample": { "configuration": { "operating_bit_rate": "3" } },
+      "note": "the literal string 'integer' was returned by the live device as a placeholder/type-hint value rather than an actual number for this field at time of capture."
+    },
+    {
+      "path": "/sdi_output/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getColorBarInfo(), getDefaultOutputMode()",
+      "description": "List of SDI output port UUIDs (6 on this model).",
+      "response_sample": ["b0d2da17-360a-4396-80a9-f620c4bb3885/", "b1d2da17-360a-4396-80a9-f620c4bb3885/", "..."]
+    },
+    {
+      "path": "/sdi_output/{id}",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getColorBarInfo(), setColorBarInfo(), setDefaultSignal()",
+      "description": "Per-SDI-output config: label, audio channel routing, line/timing offsets, loss-of-input behavior, VPID override, color bars test pattern toggle.",
+      "response_sample": {
+        "version": "1", "label": "SDI 1", "id": "b0d2da17-360a-4396-80a9-f620c4bb3885",
+        "device_id": "7e8b7b84-2ffd-4810-8c07-40a36ba22ebc",
+        "sdi_aud_chans_cfg": { "ch0": "1fbf75aa-37be-3da6-a5f1-40a36ba22ebc:0:1" },
+        "line_offset": { "offset_mode": "1", "usec_offset": "0", "v_offset": "0", "h_offset": "0", "audio_delay": "0", "applied_audio_delay": "960", "status": "0", "frame_buffer": "1" },
+        "input_signal_output_mode": { "loss_of_input": "freeze" },
+        "vpid": { "source": "regenerated", "override_value": "0x85062001" },
+        "color_bar": false
+      },
+      "post_body_samples": [
+        { "color_bar": true },
+        { "input_signal_output_mode": { "loss_of_input": "black" } }
+      ],
+      "valid_loss_of_input_values_observed": ["freeze", "black"]
+    },
+    {
+      "path": "/sdi_input/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDIinput()",
+      "description": "List of SDI input port UUIDs (2 on this model).",
+      "response_sample": ["b4d2da17-360a-4396-80a9-f620c4bb3885/", "b6d2da17-360a-4396-80a9-f620c4bb3885/"]
+    },
+    {
+      "path": "/sdi_input/{id}",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDIinput()",
+      "description": "Per-SDI-input config: label, timing offsets, genlock/frame-sync-audio settings.",
+      "response_sample": {
+        "version": "1", "label": "SDI 5", "id": "b4d2da17-360a-4396-80a9-f620c4bb3885",
+        "device_id": "ffc7e97a-3e5c-40fa-a81f-40a36ba22ebc",
+        "line_offset": { "frame_sync": "0", "offset_mode": "1", "usec_offset": "0", "v_offset": "0", "h_offset": "0", "video_rate_convert": "auto" },
+        "frame_sync_audio": { "sdi_in_genlock": "freerun", "audio_delay": 0, "applied_audio_delay": 0 }
+      }
+    },
+    {
+      "path": "/sdi_audio/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "List of SDI-audio resource UUIDs (mirrors sdi_output IDs on this model).",
+      "response_sample": ["b0d2da17-360a-4396-80a9-f620c4bb3885/", "..."]
+    },
+    {
+      "path": "/sdi_audio/{id}",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Per-port SDI audio configuration; not individually captured.",
+      "response_sample": null
+    },
+    {
+      "path": "/sources/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "NMOS Source resources (one per essence, grouped by logical device, e.g. 'Source 1-1' .. 'Source 1-6' for device CH1).",
+      "response_sample": [
+        { "version": "2", "label": "Source 1-1", "id": "7bc7bd0f-bd7f-458d-96e1-40a36ba22ebc", "device_id": "7e8b7b84-2ffd-4810-8c07-40a36ba22ebc" }
+      ]
+    },
+    {
+      "path": "/senders/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "NMOS Sender resources: which flow(s) (primary/secondary 2022-7 pair) each sender is currently transmitting, and whether it's master-enabled.",
+      "response_sample": [
+        { "version": "2", "label": " ", "id": "f77a5909-39fa-4be2-82e8-40a36ba22ebc", "flow_id": ["873d0642-3fff-256b-86e2-40a36ba22ebc", "76bf9313-edee-287d-8216-40a36ba22ebc"], "device_id": "ffc7e97a-3e5c-40fa-a81f-40a36ba22ebc", "format": "video", "master_enable": true }
+      ]
+    },
+    {
+      "path": "/senders/{id}",
+      "methods": ["GET"],
+      "source": "discovered (inferred; not individually fetched)",
+      "description": "Single sender detail; likely same shape as one array element of /senders/.",
+      "response_sample": null
+    },
+    {
+      "path": "/receivers/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "NMOS Receiver resources: which flow(s) each receiver is currently subscribed to, format, and master_enable state (this is the actual 'is this input active' switch, more useful than parsing /flows/ manually).",
+      "response_sample": [
+        { "version": "2", "label": " ", "id": "7d7ee75d-6ff7-1b7b-a82d-40a36ba22ebc", "flow_id": ["ffff2090-be3a-232c-8dc8-40a36ba22ebc", "e2ff475d-7ffb-3ddd-a5ea-40a36ba22ebc"], "device_id": "7e8b7b84-2ffd-4810-8c07-40a36ba22ebc", "format": "video", "master_enable": true }
+      ]
+    },
+    {
+      "path": "/receivers/{id}",
+      "methods": ["GET"],
+      "source": "discovered (inferred; not individually fetched)",
+      "description": "Single receiver detail; likely same shape as one array element of /receivers/.",
+      "response_sample": null
+    },
+    {
+      "path": "/senders_sdp/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDPsenders()",
+      "description": "List of sender UUIDs that have an SDP description available (same IDs as flows carried by senders).",
+      "response_sample": ["f77a5909-39fa-4be2-82e8-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/senders_sdp/{id}",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDPsenders()",
+      "description": "Raw SDP (Session Description Protocol) text for one sender, ST2110-20/30/31 style, including 2022-7 primary/secondary groups.",
+      "response_content_type": "text/plain (SDP), not JSON",
+      "response_sample": "v=0\no=- 1443716955 1443716956 IN IP4 10.101.4.158\ns=CS6.IP/HI 01_4-0-0\nt=0 0\na=group:DUP primary secondary\nm=video 20000 RTP/AVP 96\nc=IN IP4 239.4.1.2/64\na=source-filter: incl IN IP4 239.4.1.2 192.168.4.1\na=rtpmap:96 raw/90000\na=fmtp:96 sampling=YCbCr-4:2:2; width=1920; height=1080; exactframerate=30000/1001; depth=10; TCS=SDR; colorimetry=BT709; RANGE=NARROW; PM=2110GPM; SSN=ST2110-20:2017; TP=2110TPN; TROFF=652; interlace;\na=mediaclk:direct=0\na=ts-refclk:ptp=IEEE1588-2008:EC-46-70-FF-FE-0A-CA-8C:127\na=mid:primary\nm=video 20000 RTP/AVP 96\nc=IN IP4 239.4.1.3/64\n..."
+    },
+    {
+      "path": "/receivers_sdp/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDPreceivers()",
+      "description": "List of receiver UUIDs that have an SDP description available.",
+      "response_sample": ["7d7ee75d-6ff7-1b7b-a82d-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/receivers_sdp/{id}",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getSDPreceivers()",
+      "description": "Raw SDP text describing what a receiver expects/is subscribed to.",
+      "response_content_type": "text/plain (SDP), not JSON",
+      "response_sample": "v=0\no=- 4294967295 0000000049 IN IP4 10.102.2.66\ns=CS6.IP/HI 01_0-0-0\nt=0 0\na=group:DUP primary secondary\nm=video 20000 RTP/AVP 97\nc=IN IP4 238.1.17.1/64\na=source-filter: incl IN IP4 238.1.17.1 10.101.2.66\n..."
+    },
+    {
+      "path": "/sdp/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Combined list of all SDP-describable IDs (union of senders_sdp + receivers_sdp id-space, keyed by flow id).",
+      "response_sample": ["ffff2090-be3a-232c-8dc8-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/sdp/{id}",
+      "methods": ["GET"],
+      "source": "discovered (inferred; not individually fetched)",
+      "description": "Raw SDP by flow id; likely equivalent content to senders_sdp/receivers_sdp.",
+      "response_sample": null
+    },
+    {
+      "path": "/flows/",
+      "methods": ["GET"],
+      "source": "fusionFunctions.js: getActiveConnections(), getFlowsForEditor() (flowEditorFunctions.js)",
+      "description": "List of all flow UUIDs (video/audio/ancillary, primary+secondary for every sender/receiver pair). On this 6-channel device: 96 flows.",
+      "response_sample": ["ffff2090-be3a-232c-8dc8-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/flows/{id}",
+      "methods": ["GET", "POST"],
+      "source": "fusionFunctions.js: getActiveConnections(); flowEditorFunctions.js: saveFlow()",
+      "description": "Full flow detail: network params (src/dst IP:port, VLAN, SSRC, packet filters, packet counter, RTP payload type, enable/switch_state) and format params (ST2110-20 format code fields, colorimetry, bit depth, TR offset).",
+      "response_sample": {
+        "version": "2", "label": "F:  0- 0- 0", "id": "ffff2090-be3a-232c-8dc8-40a36ba22ebc",
+        "source_id": "7bc7bd0f-bd7f-458d-96e1-40a36ba22ebc", "type": "22", "name": "tx ch1 flow 0 pri",
+        "network": [
+          { "src_ip_addr": "10.101.2.66", "src_udp_port": "10000", "dst_ip_addr": "238.1.17.1", "dst_udp_port": "20000", "dst_mac": "01:00:5e:01:11:01", "vlan_tag": "0", "ssrc": "1936945763", "pkt_filter_src_ip": "1", "pkt_filter_dst_ip": "1", "pkt_filter_dst_udp": "1", "pkt_cnt": "3531958410", "rtp_pt": "97", "sender_type": "0", "enable": "1", "switch_state": "idle" }
+        ],
+        "format": {
+          "format_type": "video", "sdp_file_url": "10.102.4.158:80/emsfp/node/v1/sdp/ffff2090-be3a-232c-8dc8-40a36ba22ebc",
+          "format_code_valid": "1", "format_bit_depth": 10, "range": "NARROW", "format_colorimetry": "BT2100", "format_tcs": "HLG", "format_tr_offset": 764
+        },
+        "cdis": "single"
+      },
+      "post_body_sample": {
+        "network": { "dst_ip_addr": "238.1.17.1", "dst_udp_port": 20000, "src_ip_addr": "10.101.2.66", "src_udp_port": 10000 }
+      },
+      "note": "GET returns 'network' as an array of up to 4 legs (primary/secondary + spares); flowEditorFunctions.js POSTs 'network' back as a single flat object (first leg only) with contentType application/json explicitly set."
+    },
+    {
+      "path": "/devices/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "The 8 logical channel 'devices' (NMOS Device resources): 6 decapsulators (SDI output, IP->SDI, CH1-4 & CH6/CH8) and 2 encapsulators (SDI input, SDI->IP, CH5 & CH7) on this model. Each lists its input/output media types and the sender/receiver IDs it owns -- the fastest way to see overall routing topology in one call.",
+      "response_sample": [
+        { "version": "2", "label": "Device CH1", "inputs": ["st2110-20", "st2110-30", "st2110-31", "st2110-40"], "outputs": ["sdi"], "id": "7e8b7b84-2ffd-4810-8c07-40a36ba22ebc", "node_id": "ff8f9e8a-77fe-43e3-acf5-40a36ba22ebc", "senders": [], "receivers": ["7d7ee75d-6ff7-1b7b-a82d-40a36ba22ebc", "..."] },
+        { "version": "2", "label": "Device CH5", "inputs": ["sdi"], "outputs": ["st2110-20", "st2110-30", "st2110-31", "st2110-40"], "id": "ffc7e97a-3e5c-40fa-a81f-40a36ba22ebc", "node_id": "ff8f9e8a-77fe-43e3-acf5-40a36ba22ebc", "senders": ["f77a5909-39fa-4be2-82e8-40a36ba22ebc", "..."], "receivers": [] }
+      ]
+    },
+    {
+      "path": "/devices/{id}",
+      "methods": ["GET"],
+      "source": "discovered (inferred; not individually fetched)",
+      "description": "Single device detail; likely same shape as one array element of /devices/.",
+      "response_sample": null
+    },
+    {
+      "path": "/clean_switch/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "List of device (channel) UUIDs supporting the licensed Clean Switch feature.",
+      "response_sample": ["7e8b7b84-2ffd-4810-8c07-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/clean_switch/{device_id}",
+      "methods": ["GET", "POST (likely)"],
+      "source": "discovered",
+      "description": "Clean/seamless switch control per channel -- not individually captured, needs a licensed unit and careful live testing before assuming write semantics.",
+      "response_sample": null
+    },
+    {
+      "path": "/route/bulk/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Bulk routing sub-resources.",
+      "response_sample": ["sender/", "receiver/"]
+    },
+    {
+      "path": "/route/bulk/sender/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Device UUIDs eligible as bulk-routing senders (the two encapsulator/SDI-in channels on this unit).",
+      "response_sample": ["ffc7e97a-3e5c-40fa-a81f-40a36ba22ebc/", "4bdfa514-e7ff-3761-82b3-40a36ba22ebc/"]
+    },
+    {
+      "path": "/route/bulk/receiver/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Device UUIDs eligible as bulk-routing receivers (the six decapsulator/SDI-out channels).",
+      "response_sample": ["7e8b7b84-2ffd-4810-8c07-40a36ba22ebc/", "..."]
+    },
+    {
+      "path": "/route/bulk/sender/{device_id}",
+      "methods": ["POST (probable)"],
+      "source": "discovered, not verified",
+      "description": "Presumed write endpoint to bulk-assign a sender device's flows to one or more receivers in one call. Not tested -- would require a POST against the live device to confirm the body shape.",
+      "response_sample": null
+    },
+    {
+      "path": "/telemetry/node",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Single-call node health snapshot: core temp/fan/voltage, PTP clock lock+offset, per-interface link state and live RX/TX bandwidth.",
+      "response_sample": {
+        "health": { "core_temp": 64, "fan_speed": 5383, "core_voltage": 676 },
+        "refclk": { "status": "locked", "grandmaster_id": "ec-46-70-ff-fe-0a-ca-8c", "offset_from_master": -30, "mean_delay": 3665 },
+        "interfaces": {
+          "e1": { "link_status": "up", "current_ip": "10.101.4.158/30", "current_gateway": "10.101.4.157", "packet_drop_count": 0, "rx_bw": 1364766654, "tx_bw": 26962 },
+          "e2": { "link_status": "up", "current_ip": "10.102.4.158/30", "current_gateway": "10.102.4.157", "packet_drop_count": 0, "rx_bw": 819551606, "tx_bw": 28852 },
+          "oob": { "link_status": "down", "current_ip": "0.0.0.0/32", "current_gateway": "0.0.0.0", "packet_drop_count": 0, "rx_bw": 0, "tx_bw": 0 }
+        }
+      }
+    },
+    {
+      "path": "/telemetry/ports",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Live per-SFP-port optical telemetry (subset of the fuller /port/{n} DDM data, temperature/tx/rx power only).",
+      "response_sample": { "ports": [ { "port": 1, "temperature": 39.0, "tx_power": 0, "rx_power": 0 }, { "port": 3, "temperature": 43.703, "tx_power": 776, "rx_power": 446 } ] }
+    },
+    {
+      "path": "/telemetry/devices",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Live per-channel/per-engine flow statistics: packet counts, packet rate, sequence errors, and flow-to-PTP timing offset, broken down by essence (video/audio/ancillary) and primary/secondary leg. This is the endpoint to poll for a live 'is this flow actually receiving packets and in sync' dashboard.",
+      "response_sample": {
+        "devices": [
+          {
+            "device": "7e8b7b84-2ffd-4810-8c07-40a36ba22ebc", "channel": 1, "valid": true, "type": "decapsulator",
+            "flow_to_ptp_offset": [ { "video_0": { "primary": 752036, "secondary": 752300 } } ],
+            "engines": [
+              { "engine": "7d7ee75d-6ff7-1b7b-a82d-40a36ba22ebc", "essence": "video", "flows": [
+                { "flow": "ffff2090-be3a-232c-8dc8-40a36ba22ebc", "type": "primary", "pkt_cnt": 3539646340, "pkt_rate": 182558, "sequence_error": 0 },
+                { "flow": "e2ff475d-7ffb-3ddd-a5ea-40a36ba22ebc", "type": "secondary", "pkt_cnt": 3539652461, "pkt_rate": 182559, "sequence_error": 0 }
+              ]}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "/telemetry/warnings/",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "List of warning-group IDs.",
+      "response_sample": ["1/"]
+    },
+    {
+      "path": "/telemetry/warnings/{n}",
+      "methods": ["GET"],
+      "source": "discovered",
+      "description": "Active warning codes and the affected resource UUID(s). Code 1001 was observed live on two SDI outputs (meaning not yet confirmed against vendor docs -- worth cross-checking, likely a signal-related warning such as loss-of-input or reference-lock issue).",
+      "response_sample": { "warning": [ { "code": 1001, "uuid": ["b7d2da17-360a-4396-80a9-f620c4bb3885/"] }, { "code": 1001, "uuid": ["b5d2da17-360a-4396-80a9-f620c4bb3885/"] } ] }
+    }
+  ],
+  "not_yet_explored": [
+    "POST/write semantics for: /clean_switch/{id}, /route/bulk/sender/{id}, /route/bulk/receiver/{id}, /self/diag/dns lookup trigger, /self/phy FEC commit",
+    "Individual GET detail for: /senders/{id}, /receivers/{id}, /devices/{id}, /sdp/{id}, /sdi_audio/{id}, /self/diag/flow/{id}, /self/diag/devices/{id}, /self/diag/2110-7_engine/{id}",
+    "HTTPS/authentication: only plain HTTP with no auth was observed; not tested whether an HTTPS port or auth-gated management API also exists",
+    "Whether PUT/PATCH/DELETE (advertised in Access-Control-Allow-Methods) are actually implemented anywhere, since only GET/POST are used by the existing JS client"
+  ],
+  "verification": {
+    "method": "Live read-only GET requests against production device 10.102.4.158 on 2026-09-15. No POST/write requests were sent to the device during this documentation pass.",
+    "not_verified": "All POST body samples above are taken directly from fusionFunctions.js/flowEditorFunctions.js source code, not confirmed against the live device in this session."
+  }
+}
