@@ -299,7 +299,11 @@ function portsTable(ports) {
 }
 
 function deviceMatchesFilter(dev) {
-    if (onlyProblems && dev.status === "online") return false;
+    if (onlyProblems) {
+        const redDown = columnValue(dev, "red") !== "up";
+        const blueDown = columnValue(dev, "blue") !== "up";
+        if (dev.status === "online" && !redDown && !blueDown) return false;
+    }
     if (statusFilter && dev.status !== statusFilter) return false;
     for (const key of FILTERABLE_COLUMNS) {
         const allowed = columnFilters[key];
