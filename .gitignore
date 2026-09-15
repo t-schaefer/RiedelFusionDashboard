@@ -2,3 +2,4 @@ fusion-dashboard-service/service.log
 fusion-dashboard-service/service.log.*
 __pycache__/
 *.pyc
+fusion-dashboard-service/devices.json

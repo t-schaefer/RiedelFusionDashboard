@@ -36,6 +36,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
+DEVICES_EXAMPLE_FILE = BASE_DIR / "devices.example.json"
 DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 LOG_FILE = BASE_DIR / "service.log"
 
@@ -68,6 +69,12 @@ def now_iso():
 
 
 def load_devices():
+    if not DEVICES_FILE.exists() and DEVICES_EXAMPLE_FILE.exists():
+        # First run on a fresh checkout: seed the local (git-ignored) device
+        # list from the tracked example, so `git pull` never overwrites a
+        # site's own device list once it exists.
+        DEVICES_FILE.write_text(DEVICES_EXAMPLE_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+        logger.info("devices.json not found - seeded it from devices.example.json")
     with open(DEVICES_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -144,6 +151,19 @@ def configure_syslog(ip, server, port, enable, monitoring=None):
     return http_post(ip, "/emsfp/node/v1/self/syslog", payload, REQUEST_TIMEOUT_SEC)
 
 
+def set_device_syslog_enable(ip, enable):
+    """
+    Per-device on/off toggle: reads that device's own currently-configured
+    server/port (so this never changes them) and re-posts with just the
+    enable flag flipped, leaving monitoring flags alone.
+    """
+    current = http_get_json(ip, "/emsfp/node/v1/self/syslog", REQUEST_TIMEOUT_SEC) or {}
+    current_cfg = current.get("config", {})
+    server = current_cfg.get("server")
+    port = current_cfg.get("port")
+    return configure_syslog(ip, server, port, enable)
+
+
 def poll_device_health(ip):
     with STATE_LOCK:
         if ip in INFLIGHT:
@@ -196,6 +216,7 @@ def fetch_device_config(ip):
         license_ = safe("/emsfp/node/v1/self/license")
         interfaces = safe("/emsfp/node/v1/self/interfaces")
         nmos = safe("/emsfp/node/v1/self/diag/nmos")
+        syslog = safe("/emsfp/node/v1/self/syslog")
 
         ports = []
         try:
@@ -218,6 +239,7 @@ def fetch_device_config(ip):
                 "license": license_,
                 "interfaces": interfaces,
                 "nmos": nmos,
+                "syslog": syslog,
                 "ports": ports,
             }
             rec["configError"] = None
@@ -354,6 +376,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "httpStatus": status, "body": body[:500]})
             except Exception as e:
                 logger.error("reboot failed for %s: %s", ip, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/syslog-enable":
+            ip = (data.get("ip") or "").strip()
+            enable = bool(data.get("enable", True))
+            if not ip or ip not in STATE:
+                self._send_json({"ok": False, "error": "unknown device"}, 400)
+                return
+            logger.info("syslog enable=%s requested for %s via API", enable, ip)
+            try:
+                status, body = set_device_syslog_enable(ip, enable)
+                self._send_json({"ok": True, "httpStatus": status, "body": body[:500]})
+            except Exception as e:
+                logger.error("syslog enable change failed for %s: %s", ip, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/syslog":
             server_addr = (data.get("server") or "").strip()

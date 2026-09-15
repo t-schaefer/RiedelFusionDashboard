@@ -20,6 +20,22 @@ device at once.
 See [`fusion-dashboard-service/README.txt`](fusion-dashboard-service/README.txt)
 for install/setup instructions.
 
+### Upgrading a deployed instance
+
+If the Windows PC's copy is a `git clone` of this repo, run
+[`update-windows.ps1`](update-windows.ps1) from the repo root (as
+Administrator) to pull the latest version and restart the service:
+
+```powershell
+cd C:\path\to\RiedelFusionDashboard
+powershell -ExecutionPolicy Bypass -File .\update-windows.ps1
+```
+
+`fusion-dashboard-service/devices.json` (the live device list) is not
+tracked in git - only `devices.example.json` is, used to seed a fresh
+`devices.json` on first run - so pulling updates never touches a site's own
+device list.
+
 ## `standalone/fusionDashboard.html`
 
 A single, fully self-contained HTML file (no server, no dependencies) - open

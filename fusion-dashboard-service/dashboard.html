@@ -96,7 +96,10 @@
     </div>
 
     <div id="warningsPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
-        <div class="small muted" style="margin-bottom:8px;">Devices currently reporting warnings. Click a row to jump to that device.</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div class="small muted">Devices currently reporting warnings. Click a row to jump to that device.</div>
+            <button class="btn" id="closeWarningsPanelBtn" title="Close">&times; Close</button>
+        </div>
         <table class="mini-table" style="width:100%">
             <thead><tr><th>IP</th><th>Name</th><th>Codes</th></tr></thead>
             <tbody id="warningsPanelBody"></tbody>
@@ -108,7 +111,7 @@
             <thead>
                 <tr>
                     <th></th><th>IP</th><th>Name</th><th>FW</th><th>Temp</th><th>PTP</th>
-                    <th>E1</th><th>E2</th><th>Warn</th><th>NMOS</th><th>Last poll</th><th></th>
+                    <th>E1</th><th>E2</th><th>Warn</th><th>NMOS</th><th>Syslog</th><th>Last poll</th><th></th>
                 </tr>
             </thead>
             <tbody id="deviceTableBody"></tbody>
@@ -223,8 +226,9 @@ function renderRow(dev) {
     const warnings = (health.warnings) || [];
     // Thresholds: yellow from 70C, red from 73C (also documented in README.txt).
     const tempColor = hlt.core_temp >= 73 ? "#dc3545" : hlt.core_temp >= 70 ? "#c98a00" : "#198754";
+    const syslogCfg = (cfg.syslog && cfg.syslog.config) || {};
 
-    row.onclick = (ev) => { if (ev.target.closest("button")) return; toggleDetail(dev.ip); };
+    row.onclick = (ev) => { if (ev.target.closest("button") || ev.target.closest("input")) return; toggleDetail(dev.ip); };
     row.innerHTML = `
       <td>${statusDot(dev.status)}</td>
       <td style="font-family:monospace">${dev.ip}</td>
@@ -234,16 +238,26 @@ function renderRow(dev) {
       <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
       <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
       <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
-      <td>${warnings.length
-        ? `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`
-        : `<span class="badge success">OK</span>`}</td>
+      <td>${(() => {
+        const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
+        if (warnings.length) return `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`;
+        if (bothLinksDown) return `<span class="badge danger">offline</span>`;
+        return `<span class="badge success">OK</span>`;
+      })()}</td>
       <td><span class="badge ${nmos.status === "connected" ? "success" : "secondary"}">${nmos.status || "-"}</span></td>
+      <td style="text-align:center"><input type="checkbox" id="syslogEnableToggle-${id}" title="Syslog enabled (uses server/monitoring settings from the Syslog panel above)" ${syslogCfg.enable ? "checked" : ""}></td>
       <td class="muted small">${fmtTime(dev.lastPollAt)}</td>
-      <td><button class="btn danger" title="Remove">&times;</button></td>`;
-    row.querySelector("button.danger").onclick = (ev) => { ev.stopPropagation(); removeDevice(dev.ip); };
+      <td></td>`;
+    document.getElementById("syslogEnableToggle-" + id).onchange = (ev) => {
+        ev.stopPropagation();
+        setDeviceSyslogEnable(dev.ip, ev.target.checked, ev.target);
+    };
 
     detail.innerHTML = `
-      <td colspan="12">
+      <td colspan="13">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
+          <button class="btn" id="closeDetail-${id}" title="Close">&times; Close</button>
+        </div>
         ${dev.status === "offline" ? `<div class="alert">Unreachable${dev.lastError ? " (" + dev.lastError + ")" : ""}</div>` : ""}
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start">
           <div class="small" style="min-width:260px">
@@ -253,7 +267,10 @@ function renderRow(dev) {
             <div>E2 IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
             <div>NMOS registry: ${nmos.registry_address || "-"}</div>
             <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns, fan: ${hlt.fan_speed ?? "-"} rpm</div>
-            ${warnings.length ? `<div style="margin-top:4px">Warnings: ${warnings.map(w => `code ${w.code}${w.uuid ? " (" + w.uuid.join(", ") + ")" : ""}`).join("; ")}</div>` : ""}
+            ${warnings.length ? `<div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
+              <span>Warnings: ${warnings.map(w => `code ${w.code}${w.uuid ? " (" + w.uuid.join(", ") + ")" : ""}`).join("; ")}</span>
+              <button class="btn" id="dismissWarnings-${id}" title="Close">&times;</button>
+            </div>` : ""}
             <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
             <div class="muted small" style="margin-top:4px">Config loaded: ${fmtTime(dev.configFetchedAt)}${dev.configError ? " - error: " + dev.configError : ""}</div>
           </div>
@@ -264,6 +281,9 @@ function renderRow(dev) {
         </div>
       </td>`;
     document.getElementById("reboot-" + id).onclick = (ev) => { ev.stopPropagation(); rebootDevice(dev.ip); };
+    document.getElementById("closeDetail-" + id).onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
+    const dismissBtn = document.getElementById("dismissWarnings-" + id);
+    if (dismissBtn) dismissBtn.onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
 
     const match = deviceMatchesFilter(dev);
     row.classList.toggle("hidden", !match);
@@ -362,10 +382,26 @@ async function togglePolling() {
     updatePollingButton(data.pollingEnabled);
 }
 document.getElementById("pollingToggleBtn").addEventListener("click", togglePolling);
+document.getElementById("closeWarningsPanelBtn").addEventListener("click", toggleWarningsPanel);
 
-async function removeDevice(ip) {
-    await fetch("/api/devices/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip }) });
-    refresh();
+async function setDeviceSyslogEnable(ip, enable, checkboxEl) {
+    checkboxEl.disabled = true;
+    try {
+        const res = await fetch("/api/devices/syslog-enable", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, enable })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            alert("Failed to change syslog enable for " + ip + ": " + (data.error || "unknown error"));
+            checkboxEl.checked = !enable;
+        }
+    } catch (e) {
+        alert("Failed to change syslog enable for " + ip + ": " + e.message);
+        checkboxEl.checked = !enable;
+    } finally {
+        checkboxEl.disabled = false;
+    }
 }
 
 document.getElementById("filterInput").addEventListener("input", (ev) => {

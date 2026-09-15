@@ -13,9 +13,16 @@ Files
 -----
 server.py                    the service itself (Python standard library only, no pip installs needed)
 dashboard.html                the web page it serves (talks only to this service, never directly to the Fusion devices)
-devices.json                  the device list (ip, name, tag) - edit this by hand, or via the "+ Device" form in the dashboard
+devices.json                  the LIVE device list (ip, name, tag) - not tracked in git, so a
+                              `git pull` update never touches it. Edit it by hand or via the
+                              "+ Device" form in the dashboard. Created automatically on first
+                              run from devices.example.json if it doesn't exist yet.
+devices.example.json          the tracked starting-point device list - only used to seed a
+                              fresh devices.json on first run
 install-task-windows.ps1      one-time setup: registers the Windows Scheduled Task
 uninstall-task-windows.ps1    removes the scheduled task and firewall rule again
+../update-windows.ps1         (repo root) pulls the latest version from git and restarts the
+                              service - see "Upgrading" below
 
 Requirements
 ------------
@@ -54,6 +61,23 @@ Uninstalling
 ------------
 Open PowerShell as Administrator, cd into this folder, run:
     powershell -ExecutionPolicy Bypass -File .\uninstall-task-windows.ps1
+
+Upgrading
+---------
+If this folder is a git checkout of the RiedelFusionDashboard repo, run
+update-windows.ps1 from the repo root (one level up from this folder):
+    cd ..
+    powershell -ExecutionPolicy Bypass -File .\update-windows.ps1
+This stops the scheduled task, runs `git pull`, and starts it again.
+devices.json is not tracked in git, so your local device list is never
+touched by an update.
+
+If this is not a git checkout (files were copied manually), stop the task,
+replace server.py and dashboard.html with the newer versions, leave
+devices.json alone, then start the task again:
+    Stop-ScheduledTask -TaskName PLSFusionDashboardService
+    ... copy the new files over ...
+    Start-ScheduledTask -TaskName PLSFusionDashboardService
 
 Changing settings
 ------------------
