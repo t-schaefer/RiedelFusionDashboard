@@ -22,9 +22,14 @@ for install/setup instructions.
 
 ### Upgrading a deployed instance
 
-If the Windows PC's copy is a `git clone` of this repo, run
-[`update-windows.ps1`](update-windows.ps1) from the repo root (as
-Administrator) to pull the latest version and restart the service:
+If the Windows PC's copy is a `git clone` of this repo, double-click
+[`Update-FusionDashboard.bat`](Update-FusionDashboard.bat) in the repo root
+to pull the latest version and restart the service - it asks for
+Administrator rights via the normal Windows UAC prompt, then runs
+[`update-windows.ps1`](update-windows.ps1) for you and pauses at the end so
+you can read the output.
+
+To run it from a PowerShell prompt instead:
 
 ```powershell
 cd C:\path\to\RiedelFusionDashboard

@@ -64,13 +64,15 @@ Open PowerShell as Administrator, cd into this folder, run:
 
 Upgrading
 ---------
-If this folder is a git checkout of the RiedelFusionDashboard repo, run
-update-windows.ps1 from the repo root (one level up from this folder):
+If this folder is a git checkout of the RiedelFusionDashboard repo, go one
+level up to the repo root and double-click Update-FusionDashboard.bat (it
+will ask for Administrator rights via the normal Windows prompt). Or run
+update-windows.ps1 yourself from a PowerShell prompt:
     cd ..
     powershell -ExecutionPolicy Bypass -File .\update-windows.ps1
-This stops the scheduled task, runs `git pull`, and starts it again.
-devices.json is not tracked in git, so your local device list is never
-touched by an update.
+Either way, this stops the scheduled task, runs `git pull`, and starts it
+again. devices.json is not tracked in git, so your local device list is
+never touched by an update.
 
 If this is not a git checkout (files were copied manually), stop the task,
 replace server.py and dashboard.html with the newer versions, leave

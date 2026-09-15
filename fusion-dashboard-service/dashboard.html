@@ -128,6 +128,7 @@
 const REFRESH_MS = 4000;
 let filterText = "";
 let onlyProblems = false;
+let statusFilter = null;
 let lastData = { devices: [] };
 
 // MN SET runs on the same host as this dashboard, on port 8080.
@@ -159,10 +160,17 @@ function portsTable(ports) {
 
 function deviceMatchesFilter(dev) {
     if (onlyProblems && dev.status === "online") return false;
+    if (statusFilter && dev.status !== statusFilter) return false;
     if (!filterText) return true;
     const hostname = (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "";
     const haystack = (dev.ip + " " + (dev.name || "") + " " + (dev.tag || "") + " " + hostname).toLowerCase();
     return haystack.includes(filterText);
+}
+
+function setStatusFilter(status) {
+    statusFilter = (statusFilter === status) ? null : status;
+    lastData.devices.forEach(renderRow);
+    renderSummary(lastData.summary);
 }
 
 function toggleDetail(ip) {
@@ -303,13 +311,19 @@ function pruneRemovedRows(devices) {
 }
 
 function renderSummary(summary) {
+    const ring = (status) => statusFilter === status ? "outline:2px solid #212529; outline-offset:1px;" : "";
     document.getElementById("summaryBar").innerHTML =
-        `<span class="badge success">${summary.online || 0} online</span> ` +
+        `<span class="badge success" id="onlineSummaryBadge" style="cursor:pointer; ${ring("online")}" title="Click to show only online devices">${summary.online || 0} online</span> ` +
         `<span class="badge warning" id="warningSummaryBadge" style="cursor:pointer" title="Click to list devices with warnings">${summary.warning || 0} warning</span> ` +
-        `<span class="badge danger">${summary.offline || 0} offline</span> ` +
+        `<span class="badge danger" id="offlineSummaryBadge" style="cursor:pointer; ${ring("offline")}" title="Click to show only offline devices">${summary.offline || 0} offline</span> ` +
         (summary.unknown ? `<span class="badge secondary">${summary.unknown} unknown</span> ` : "") +
-        `<span class="muted small">${summary.total || 0} devices total</span>`;
+        `<span class="muted small">${summary.total || 0} devices total</span>` +
+        (statusFilter ? ` <button class="btn" id="clearStatusFilterBtn" style="margin-left:6px;">&times; clear filter</button>` : "");
     document.getElementById("warningSummaryBadge").onclick = toggleWarningsPanel;
+    document.getElementById("onlineSummaryBadge").onclick = () => setStatusFilter("online");
+    document.getElementById("offlineSummaryBadge").onclick = () => setStatusFilter("offline");
+    const clearBtn = document.getElementById("clearStatusFilterBtn");
+    if (clearBtn) clearBtn.onclick = () => setStatusFilter(statusFilter);
 }
 
 function renderWarningsPanel(devices) {
