@@ -94,6 +94,18 @@ After changing these, restart the task:
     Restart-ScheduledTask -TaskName PLSFusionDashboardService
 (or just reboot - it starts automatically).
 
+Red/Blue network failover
+---------------------------
+Every request to a device (health poll, config fetch, reboot, syslog
+changes) tries the device's Red (primary) address first - the one in
+devices.json - and automatically retries over Blue (backup) if Red doesn't
+answer. The Blue address is derived, not configured: same IP with the
+second octet incremented by one (e.g. 10.101.4.158 red -> 10.102.4.158
+blue), matching this fleet's SMPTE 2022-7 style addressing. The dashboard
+outlines whichever of the Red/Blue badges is currently in use, and the
+device detail panel shows a blue banner when it's talking to a device over
+Blue only.
+
 Dashboard controls
 -------------------
 Pause polling (global) - top-right button. Stops the background health/config

@@ -95,6 +95,7 @@ def init_state():
                 "lastError": None,
                 "lastPollAt": None,
                 "health": None,
+                "activeNetwork": None,
                 "config": None,
                 "configFetchedAt": None,
                 "configError": None,
@@ -120,6 +121,45 @@ def http_post(ip, path, payload, timeout):
         return res.status, res.read().decode("utf-8", errors="replace")
 
 
+def derive_blue_ip(red_ip):
+    """
+    SMPTE 2022-7 style redundant addressing seen across this fleet: the
+    Blue (backup) network address is the same as Red (primary), with the
+    second octet incremented by one - e.g. 10.101.4.158 (red) <->
+    10.102.4.158 (blue), confirmed against self/interfaces e1/e2 on several
+    devices. Returns None if `red_ip` doesn't look like a plain IPv4 address.
+    """
+    parts = red_ip.split(".")
+    if len(parts) != 4:
+        return None
+    try:
+        octets = [int(p) for p in parts]
+    except ValueError:
+        return None
+    octets[1] += 1
+    return ".".join(str(o) for o in octets)
+
+
+def call_with_failover(red_ip, fn):
+    """
+    Calls fn(ip) against the Red (primary) address first; if that raises,
+    retries once against the derived Blue (backup) address. Returns
+    (result, used_ip, used_network) where used_network is "red" or "blue".
+    Re-raises the original Red-path exception if there's no usable Blue
+    address or the Blue attempt also fails.
+    """
+    try:
+        return fn(red_ip), red_ip, "red"
+    except Exception as red_err:
+        blue_ip = derive_blue_ip(red_ip)
+        if not blue_ip:
+            raise
+        try:
+            return fn(blue_ip), blue_ip, "blue"
+        except Exception:
+            raise red_err
+
+
 def reboot_device(ip):
     """
     Sends the Fusion device's documented-by-field-name reboot trigger:
@@ -129,8 +169,12 @@ def reboot_device(ip):
     unit during development (that would mean actually rebooting a production
     device to test it). Verify once on a device you know is safe to restart,
     and if the response looks wrong, check service.log for the raw body.
+    Falls back to the Blue address if Red doesn't respond.
     """
-    return http_post(ip, "/emsfp/node/v1/self/system", {"reboot": "1"}, REQUEST_TIMEOUT_SEC)
+    (status, body), used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_post(addr, "/emsfp/node/v1/self/system", {"reboot": "1"}, REQUEST_TIMEOUT_SEC)
+    )
+    return status, body, used_net
 
 
 def configure_syslog(ip, server, port, enable, monitoring=None):
@@ -143,25 +187,33 @@ def configure_syslog(ip, server, port, enable, monitoring=None):
     sub-object, e.g. {"common": {"ptp_event": True}, "decap": {"output_flywheel": True}}.
     Not verified against a live unit (that would mean actually repointing a
     production device's syslog target to test it) - verify on one device
-    before applying fleet-wide.
+    before applying fleet-wide. Falls back to the Blue address if Red
+    doesn't respond.
     """
     payload = {"config": {"server": server, "port": port, "enable": enable}}
     if monitoring:
         payload["monitoring"] = monitoring
-    return http_post(ip, "/emsfp/node/v1/self/syslog", payload, REQUEST_TIMEOUT_SEC)
+    (status, body), used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_post(addr, "/emsfp/node/v1/self/syslog", payload, REQUEST_TIMEOUT_SEC)
+    )
+    return status, body, used_net
 
 
 def set_device_syslog_enable(ip, enable):
     """
     Per-device on/off toggle: reads that device's own currently-configured
     server/port (so this never changes them) and re-posts with just the
-    enable flag flipped, leaving monitoring flags alone.
+    enable flag flipped, leaving monitoring flags alone. Uses whichever of
+    Red/Blue actually answers, and posts the change back over that same path.
     """
-    current = http_get_json(ip, "/emsfp/node/v1/self/syslog", REQUEST_TIMEOUT_SEC) or {}
-    current_cfg = current.get("config", {})
+    current, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/self/syslog", REQUEST_TIMEOUT_SEC)
+    )
+    current_cfg = (current or {}).get("config", {})
     server = current_cfg.get("server")
     port = current_cfg.get("port")
-    return configure_syslog(ip, server, port, enable)
+    status, body = http_post(used_ip, "/emsfp/node/v1/self/syslog", {"config": {"server": server, "port": port, "enable": enable}}, REQUEST_TIMEOUT_SEC)
+    return status, body, used_net
 
 
 def poll_device_health(ip):
@@ -170,13 +222,15 @@ def poll_device_health(ip):
             return
         INFLIGHT.add(ip)
     try:
-        node = http_get_json(ip, "/emsfp/node/v1/telemetry/node", REQUEST_TIMEOUT_SEC)
+        node, used_ip, used_net = call_with_failover(
+            ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/telemetry/node", REQUEST_TIMEOUT_SEC)
+        )
         warnings = []
         try:
-            warn_ids = http_get_json(ip, "/emsfp/node/v1/telemetry/warnings/", REQUEST_TIMEOUT_SEC) or []
+            warn_ids = http_get_json(used_ip, "/emsfp/node/v1/telemetry/warnings/", REQUEST_TIMEOUT_SEC) or []
             for wid in warn_ids:
                 clean = str(wid).rstrip("/")
-                w = http_get_json(ip, "/emsfp/node/v1/telemetry/warnings/" + clean, REQUEST_TIMEOUT_SEC)
+                w = http_get_json(used_ip, "/emsfp/node/v1/telemetry/warnings/" + clean, REQUEST_TIMEOUT_SEC)
                 if isinstance(w, dict) and w.get("warning"):
                     warnings.extend(w["warning"])
         except Exception:
@@ -188,13 +242,15 @@ def poll_device_health(ip):
             rec["health"] = {"node": node, "warnings": warnings}
             rec["status"] = "warning" if warnings else "online"
             rec["lastError"] = None
+            rec["activeNetwork"] = used_net
     except Exception as e:
         with STATE_LOCK:
             rec = STATE.get(ip)
             if rec is not None:
                 rec["status"] = "offline"
                 rec["lastError"] = str(e)
-        logger.warning("health poll failed for %s: %s", ip, e)
+                rec["activeNetwork"] = None
+        logger.warning("health poll failed for %s (red and blue both unreachable): %s", ip, e)
     finally:
         with STATE_LOCK:
             if ip in STATE:
@@ -205,12 +261,19 @@ def poll_device_health(ip):
 def fetch_device_config(ip):
     def safe(path):
         try:
-            return http_get_json(ip, path, CONFIG_TIMEOUT_SEC)
+            return http_get_json(used_ip, path, CONFIG_TIMEOUT_SEC)
         except Exception:
             return None
 
+    # Determine which of Red/Blue is reachable once (via the first call),
+    # then reuse that address for the rest of this device's config calls -
+    # retrying the failover for every single sub-call would multiply the
+    # timeout cost whenever Red is down.
+    used_ip = ip
     try:
-        ipconfig = safe("/emsfp/node/v1/self/ipconfig")
+        ipconfig, used_ip, used_net = call_with_failover(
+            ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/self/ipconfig", CONFIG_TIMEOUT_SEC)
+        )
         information = safe("/emsfp/node/v1/self/information")
         firmware = safe("/emsfp/node/v1/self/firmware")
         license_ = safe("/emsfp/node/v1/self/license")
@@ -220,7 +283,7 @@ def fetch_device_config(ip):
 
         ports = []
         try:
-            port_list = http_get_json(ip, "/emsfp/node/v1/port", CONFIG_TIMEOUT_SEC) or []
+            port_list = http_get_json(used_ip, "/emsfp/node/v1/port", CONFIG_TIMEOUT_SEC) or []
             for p in port_list:
                 num = str(p).rstrip("/")
                 detail = safe("/emsfp/node/v1/port/" + num)
@@ -348,6 +411,7 @@ class Handler(BaseHTTPRequestHandler):
                     STATE[ip] = {
                         "ip": ip, "name": name, "tag": tag, "status": "unknown",
                         "lastError": None, "lastPollAt": None, "health": None,
+                        "activeNetwork": None,
                         "config": None, "configFetchedAt": None, "configError": None,
                     }
                 devices = load_devices()
@@ -371,9 +435,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             logger.warning("reboot requested for %s via API", ip)
             try:
-                status, body = reboot_device(ip)
-                logger.warning("reboot response for %s: HTTP %s %s", ip, status, body[:300])
-                self._send_json({"ok": True, "httpStatus": status, "body": body[:500]})
+                status, body, used_net = reboot_device(ip)
+                logger.warning("reboot response for %s (via %s): HTTP %s %s", ip, used_net, status, body[:300])
+                self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
             except Exception as e:
                 logger.error("reboot failed for %s: %s", ip, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
@@ -385,8 +449,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             logger.info("syslog enable=%s requested for %s via API", enable, ip)
             try:
-                status, body = set_device_syslog_enable(ip, enable)
-                self._send_json({"ok": True, "httpStatus": status, "body": body[:500]})
+                status, body, used_net = set_device_syslog_enable(ip, enable)
+                # Reflect the change immediately so the checkbox doesn't
+                # appear to "snap back" before the next slow config refresh
+                # (every CONFIG_REFRESH_INTERVAL_SEC) picks it up for real.
+                with STATE_LOCK:
+                    rec = STATE.get(ip)
+                    if rec and rec.get("config") and rec["config"].get("syslog"):
+                        rec["config"]["syslog"].setdefault("config", {})["enable"] = enable
+                self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
             except Exception as e:
                 logger.error("syslog enable change failed for %s: %s", ip, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
@@ -407,8 +478,12 @@ class Handler(BaseHTTPRequestHandler):
 
             def apply_one(ip):
                 try:
-                    status, body = configure_syslog(ip, server_addr, port, enable, monitoring)
-                    return ip, True, f"HTTP {status}"
+                    status, body, used_net = configure_syslog(ip, server_addr, port, enable, monitoring)
+                    with STATE_LOCK:
+                        rec = STATE.get(ip)
+                        if rec and rec.get("config") and rec["config"].get("syslog"):
+                            rec["config"]["syslog"].setdefault("config", {})["enable"] = enable
+                    return ip, True, f"HTTP {status} (via {used_net})"
                 except Exception as e:
                     return ip, False, str(e)
 

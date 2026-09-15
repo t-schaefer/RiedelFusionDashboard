@@ -111,7 +111,7 @@
             <thead>
                 <tr>
                     <th></th><th>IP</th><th>Name</th><th>FW</th><th>Temp</th><th>PTP</th>
-                    <th>E1</th><th>E2</th><th>Warn</th><th>NMOS</th><th>Syslog</th><th>Last poll</th><th></th>
+                    <th title="Red = primary comms interface">Red</th><th title="Blue = backup, only carries traffic when Red is unreachable">Blue</th><th>Warn</th><th>NMOS</th><th>Syslog</th><th>Last poll</th><th></th>
                 </tr>
             </thead>
             <tbody id="deviceTableBody"></tbody>
@@ -196,7 +196,7 @@ async function rebootDevice(ip) {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip })
         });
         const data = await res.json();
-        alert(data.ok ? "Reboot command sent to " + ip + "." : "Failed: " + (data.error || "unknown error"));
+        alert(data.ok ? "Reboot command sent to " + ip + " (via " + (data.network || "?") + ")." : "Failed: " + (data.error || "unknown error"));
     } catch (e) {
         alert("Failed to send reboot command: " + e.message);
     } finally {
@@ -244,8 +244,8 @@ function renderRow(dev) {
       <td>${fw ? fw.semantic_version : "-"}</td>
       <td style="color:${tempColor};font-weight:600">${hlt.core_temp ?? "-"}&deg;C</td>
       <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
-      <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
-      <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
+      <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}" style="${dev.activeNetwork === "red" ? "outline:2px solid #212529;" : ""}" title="${dev.activeNetwork === "red" ? "Currently communicating via Red" : ""}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
+      <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}" style="${dev.activeNetwork === "blue" ? "outline:2px solid #212529;" : ""}" title="${dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : ""}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
       <td>${(() => {
         const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
         if (warnings.length) return `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`;
@@ -267,12 +267,13 @@ function renderRow(dev) {
           <button class="btn" id="closeDetail-${id}" title="Close">&times; Close</button>
         </div>
         ${dev.status === "offline" ? `<div class="alert">Unreachable${dev.lastError ? " (" + dev.lastError + ")" : ""}</div>` : ""}
+        ${dev.activeNetwork === "blue" ? `<div class="alert" style="background:#cfe2ff; color:#084298;">Communicating via Blue (backup) - Red is not responding right now.</div>` : ""}
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start">
           <div class="small" style="min-width:260px">
             <div>Serial number: ${(cfg.information && cfg.information.serial_number) || "-"}</div>
             <div>MAC: ${(cfg.ipconfig && cfg.ipconfig.local_mac) || "-"}</div>
-            <div>E1 IP: ${(cfg.interfaces && cfg.interfaces.e1 && cfg.interfaces.e1.current_ip) || "-"} (${(ifs.e1 && fmtBw(ifs.e1.rx_bw)) || "-"} rx)</div>
-            <div>E2 IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
+            <div>Red IP: ${(cfg.interfaces && cfg.interfaces.e1 && cfg.interfaces.e1.current_ip) || "-"} (${(ifs.e1 && fmtBw(ifs.e1.rx_bw)) || "-"} rx)</div>
+            <div>Blue IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
             <div>NMOS registry: ${nmos.registry_address || "-"}</div>
             <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns, fan: ${hlt.fan_speed ?? "-"} rpm</div>
             ${warnings.length ? `<div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
