@@ -106,6 +106,23 @@ outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
 
+Color bars and stream rates (per device, on demand)
+------------------------------------------------------
+In the expanded device row, "Color bars" and "Stream rates" each start
+collapsed with a "Load" button - unlike everything else in this file, they
+are NOT fetched by the background poll, only when you click Load, because
+either one is several extra calls per device and nobody needs live data for
+a device nobody is looking at right now. Click "Refresh" to update; the
+loaded data is cached per-browser-tab so it survives the 4s auto-refresh.
+
+Color bars: one checkbox per SDI output, mirroring the old
+fusionFunctions.js setColorBarInfo(). Turning one ON puts a test pattern on
+that output in place of the live picture, so it asks for confirmation
+first - only do this if you know that output isn't on air.
+
+Stream rates: live packet rate / sequence-error count per flow
+(/telemetry/devices), one row per channel/essence/leg. Read-only.
+
 Dashboard controls
 -------------------
 Pause polling (global) - top-right button. Stops the background health/config

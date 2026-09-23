@@ -33,6 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
@@ -216,6 +217,62 @@ def set_device_syslog_enable(ip, enable):
     return status, body, used_net
 
 
+def get_color_bars(ip):
+    """
+    On-demand only (not part of the background poll): lists this device's
+    SDI outputs and whether each currently has its color-bar test pattern
+    on, mirroring the old fusionFunctions.js getColorBarInfo()/setColorBarInfo().
+    """
+    id_list, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/sdi_output/", REQUEST_TIMEOUT_SEC)
+    )
+    outputs = []
+    for entry in id_list or []:
+        out_id = str(entry).rstrip("/")
+        detail = http_get_json(used_ip, "/emsfp/node/v1/sdi_output/" + out_id, REQUEST_TIMEOUT_SEC)
+        outputs.append({"id": out_id, "label": detail.get("label"), "color_bar": detail.get("color_bar")})
+    return outputs, used_net
+
+
+def set_color_bar(ip, sdi_output_id, value):
+    """
+    POST /sdi_output/{id} {"color_bar": true|false} - this puts a live test
+    pattern on that SDI output in place of the real picture, so it needs the
+    same care as a reboot: confirm before enabling on a device that's on air.
+    """
+    (status, body), used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_post(addr, "/emsfp/node/v1/sdi_output/" + sdi_output_id, {"color_bar": bool(value)}, REQUEST_TIMEOUT_SEC)
+    )
+    return status, body, used_net
+
+
+def get_stream_rates(ip):
+    """
+    On-demand only: live per-flow packet rate/count/sequence-error telemetry
+    for every channel on this device (/telemetry/devices), flattened into a
+    simple list for the UI instead of the deeply nested shape the device
+    returns it in.
+    """
+    data, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/telemetry/devices", REQUEST_TIMEOUT_SEC)
+    )
+    rows = []
+    for chan in (data or {}).get("devices", []):
+        for engine in chan.get("engines", []):
+            for flow in engine.get("flows", []):
+                rows.append({
+                    "channel": chan.get("channel"),
+                    "type": chan.get("type"),
+                    "essence": engine.get("essence"),
+                    "leg": flow.get("type"),
+                    "flow": flow.get("flow"),
+                    "pkt_rate": flow.get("pkt_rate"),
+                    "pkt_cnt": flow.get("pkt_cnt"),
+                    "sequence_error": flow.get("sequence_error"),
+                })
+    return rows, used_net
+
+
 def poll_device_health(ip):
     with STATE_LOCK:
         if ip in INFLIGHT:
@@ -387,6 +444,26 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif self.path == "/api/state":
             self._send_json(snapshot())
+        elif self.path.startswith("/api/devices/colorbars"):
+            ip = (parse_qs(urlparse(self.path).query).get("ip") or [""])[0]
+            if not ip or ip not in STATE:
+                self._send_json({"ok": False, "error": "unknown device"}, 400)
+                return
+            try:
+                outputs, used_net = get_color_bars(ip)
+                self._send_json({"ok": True, "network": used_net, "outputs": outputs})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path.startswith("/api/devices/streams"):
+            ip = (parse_qs(urlparse(self.path).query).get("ip") or [""])[0]
+            if not ip or ip not in STATE:
+                self._send_json({"ok": False, "error": "unknown device"}, 400)
+                return
+            try:
+                rows, used_net = get_stream_rates(ip)
+                self._send_json({"ok": True, "network": used_net, "streams": rows})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, 502)
         else:
             self.send_error(404)
 
@@ -440,6 +517,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
             except Exception as e:
                 logger.error("reboot failed for %s: %s", ip, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/colorbar":
+            ip = (data.get("ip") or "").strip()
+            sdi_output_id = (data.get("sdiOutputId") or "").strip()
+            value = bool(data.get("value"))
+            if not ip or ip not in STATE or not sdi_output_id:
+                self._send_json({"ok": False, "error": "ip and sdiOutputId are required"}, 400)
+                return
+            logger.warning("color_bar=%s requested for %s / %s via API", value, ip, sdi_output_id)
+            try:
+                status, body, used_net = set_color_bar(ip, sdi_output_id, value)
+                self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
+            except Exception as e:
+                logger.error("color_bar change failed for %s / %s: %s", ip, sdi_output_id, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/syslog-enable":
             ip = (data.get("ip") or "").strip()

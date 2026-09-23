@@ -444,11 +444,28 @@ function renderRow(dev) {
             <button class="btn danger" id="reboot-${id}" title="Reboot this device">Reboot</button>
           </div>
         </div>
+        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; border-top:1px solid #e9ecef; padding-top:10px;">
+          <div>
+            <div class="small" style="font-weight:600; margin-bottom:4px;">
+              Color bars <button class="btn" id="colorBarLoad-${id}">${colorBarCache[dev.ip] ? "↻ Refresh" : "Load"}</button>
+            </div>
+            <div id="colorBarBody-${id}">${colorBarSectionHtml(dev.ip, id)}</div>
+          </div>
+          <div>
+            <div class="small" style="font-weight:600; margin-bottom:4px;">
+              Stream rates <button class="btn" id="streamsLoad-${id}">${streamCache[dev.ip] ? "↻ Refresh" : "Load"}</button>
+            </div>
+            <div id="streamsBody-${id}">${streamsSectionHtml(dev.ip)}</div>
+          </div>
+        </div>
       </td>`;
     document.getElementById("reboot-" + id).onclick = (ev) => { ev.stopPropagation(); rebootDevice(dev.ip); };
     document.getElementById("closeDetail-" + id).onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
     const dismissBtn = document.getElementById("dismissWarnings-" + id);
     if (dismissBtn) dismissBtn.onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
+    document.getElementById("colorBarLoad-" + id).onclick = (ev) => { ev.stopPropagation(); loadColorBars(dev.ip, id); };
+    document.getElementById("streamsLoad-" + id).onclick = (ev) => { ev.stopPropagation(); loadStreams(dev.ip, id); };
+    wireColorBarCheckboxes(dev.ip, id);
 
     const match = deviceMatchesFilter(dev);
     row.classList.toggle("hidden", !match);
@@ -571,6 +588,124 @@ async function setDeviceSyslogEnable(ip, enable, checkboxEl) {
     } catch (e) {
         alert("Failed to change syslog enable for " + ip + ": " + e.message);
         checkboxEl.checked = !enable;
+    } finally {
+        checkboxEl.disabled = false;
+    }
+}
+
+// Color bars and stream rates are fetched on demand (only when a device's
+// row is expanded and "Load" is clicked), never as part of the recurring
+// poll - both can involve several extra calls per device, so pulling them
+// for all 107 devices continuously would add real load for data almost
+// nobody is looking at right now. Results are cached client-side so they
+// survive the 4s auto-refresh re-render instead of disappearing.
+let colorBarCache = {};
+let streamCache = {};
+
+function colorBarSectionHtml(ip, id) {
+    const cached = colorBarCache[ip];
+    if (!cached) return '<span class="muted small">not loaded</span>';
+    if (!cached.outputs || !cached.outputs.length) return '<span class="muted small">no SDI outputs found</span>';
+    return '<table class="mini-table">' +
+        '<thead><tr><th>Output</th><th>Color bars</th></tr></thead><tbody>' +
+        cached.outputs.map(o => `<tr><td>${o.label || o.id}</td><td><input type="checkbox" class="colorBarCheck" data-ip="${ip}" data-out="${o.id}" ${o.color_bar ? "checked" : ""}></td></tr>`).join("") +
+        "</tbody></table>" +
+        `<div class="muted small" style="margin-top:4px">via ${cached.network || "?"}</div>`;
+}
+
+function streamsSectionHtml(ip) {
+    const cached = streamCache[ip];
+    if (!cached) return '<span class="muted small">not loaded</span>';
+    if (!cached.streams || !cached.streams.length) return '<span class="muted small">no active streams found</span>';
+    return `<div style="max-height:220px; overflow-y:auto;"><table class="mini-table">` +
+        "<thead><tr><th>Ch</th><th>Type</th><th>Essence</th><th>Leg</th><th>pkt/s</th><th>Seq err</th></tr></thead><tbody>" +
+        cached.streams.map(s => `<tr><td>${s.channel ?? "-"}</td><td>${s.type || "-"}</td><td>${s.essence || "-"}</td><td>${s.leg || "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td></tr>`).join("") +
+        "</tbody></table></div>" +
+        `<div class="muted small" style="margin-top:4px">via ${cached.network || "?"}</div>`;
+}
+
+async function loadColorBars(ip, id) {
+    const body = document.getElementById("colorBarBody-" + id);
+    const btn = document.getElementById("colorBarLoad-" + id);
+    if (btn) { btn.disabled = true; }
+    if (body) body.innerHTML = '<span class="muted small">loading...</span>';
+    try {
+        const res = await fetch("/api/devices/colorbars?ip=" + encodeURIComponent(ip));
+        const data = await res.json();
+        if (data.ok) {
+            colorBarCache[ip] = { outputs: data.outputs, network: data.network };
+        } else if (body) {
+            body.innerHTML = '<span class="muted small">failed: ' + (data.error || "unknown error") + "</span>";
+        }
+    } catch (e) {
+        if (body) body.innerHTML = '<span class="muted small">failed: ' + e.message + "</span>";
+    }
+    if (btn) btn.disabled = false;
+    if (body && colorBarCache[ip]) body.innerHTML = colorBarSectionHtml(ip, id);
+    const loadBtn = document.getElementById("colorBarLoad-" + id);
+    if (loadBtn) loadBtn.textContent = "↻ Refresh";
+    wireColorBarCheckboxes(ip, id);
+}
+
+async function loadStreams(ip, id) {
+    const body = document.getElementById("streamsBody-" + id);
+    const btn = document.getElementById("streamsLoad-" + id);
+    if (btn) { btn.disabled = true; }
+    if (body) body.innerHTML = '<span class="muted small">loading...</span>';
+    try {
+        const res = await fetch("/api/devices/streams?ip=" + encodeURIComponent(ip));
+        const data = await res.json();
+        if (data.ok) {
+            streamCache[ip] = { streams: data.streams, network: data.network };
+        } else if (body) {
+            body.innerHTML = '<span class="muted small">failed: ' + (data.error || "unknown error") + "</span>";
+        }
+    } catch (e) {
+        if (body) body.innerHTML = '<span class="muted small">failed: ' + e.message + "</span>";
+    }
+    if (btn) btn.disabled = false;
+    if (body && streamCache[ip]) body.innerHTML = streamsSectionHtml(ip);
+    const loadBtn = document.getElementById("streamsLoad-" + id);
+    if (loadBtn) loadBtn.textContent = "↻ Refresh";
+}
+
+function wireColorBarCheckboxes(ip, id) {
+    document.querySelectorAll('#colorBarBody-' + id + ' .colorBarCheck').forEach(cb => {
+        cb.onchange = (ev) => {
+            ev.stopPropagation();
+            const outId = cb.dataset.out;
+            const value = cb.checked;
+            if (value && !confirm(
+                "Turn ON color bars for " + ip + " / output " + outId + "?\n\n" +
+                "This replaces the live picture on that SDI output with a test " +
+                "pattern. Only do this if you know that output isn't on air right now."
+            )) { cb.checked = false; return; }
+            setColorBar(ip, outId, value, cb);
+        };
+    });
+}
+
+async function setColorBar(ip, sdiOutputId, value, checkboxEl) {
+    checkboxEl.disabled = true;
+    try {
+        const res = await fetch("/api/devices/colorbar", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, sdiOutputId, value })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            const cached = colorBarCache[ip];
+            if (cached) {
+                const entry = cached.outputs.find(o => o.id === sdiOutputId);
+                if (entry) entry.color_bar = value;
+            }
+        } else {
+            alert("Failed to change color bars: " + (data.error || "unknown error"));
+            checkboxEl.checked = !value;
+        }
+    } catch (e) {
+        alert("Failed to change color bars: " + e.message);
+        checkboxEl.checked = !value;
     } finally {
         checkboxEl.disabled = false;
     }
