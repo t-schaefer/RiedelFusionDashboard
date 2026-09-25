@@ -178,16 +178,17 @@ function columnValue(dev, key) {
     const nmos = cfg.nmos || {};
     const warnings = health.warnings || [];
     const syslogCfg = (cfg.syslog && cfg.syslog.config) || {};
-    const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
+    const isStale = dev.status === "offline";
+    const bothLinksDown = isStale || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
     switch (key) {
         case "ip": return dev.ip.split(".").map(Number);
         case "name": return ((cfg.ipconfig && cfg.ipconfig.hostname) || dev.name || "").toLowerCase();
         case "type": return deviceType(dev);
         case "fw": return fw ? fw.semantic_version : "-";
-        case "temp": return hlt.core_temp ?? null;
-        case "ptp": return refclk.status || "-";
-        case "red": return (ifs.e1 && ifs.e1.link_status) || "-";
-        case "blue": return (ifs.e2 && ifs.e2.link_status) || "-";
+        case "temp": return isStale ? null : (hlt.core_temp ?? null);
+        case "ptp": return isStale ? "-" : (refclk.status || "-");
+        case "red": return isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-");
+        case "blue": return isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-");
         case "warn": return warnings.length ? "warning" : (bothLinksDown ? "offline" : "OK");
         case "nmos": return nmos.status || "-";
         case "syslog": return syslogCfg.enable ? "on" : "off";
@@ -404,6 +405,12 @@ function renderRow(dev) {
     // Thresholds: yellow from 70C, red from 73C (also documented in README.txt).
     const tempColor = hlt.core_temp >= 73 ? "#dc3545" : hlt.core_temp >= 70 ? "#c98a00" : "#198754";
     const syslogCfg = (cfg.syslog && cfg.syslog.config) || {};
+    // When a device is unreachable, health fields keep whatever they were
+    // at the last successful poll (see README.txt) - shown normally that
+    // reads as contradictory ("Red: up" next to "Warn: offline"), so grey
+    // these cells out and push the stale values into a tooltip instead.
+    const isStale = dev.status === "offline";
+    const staleTitle = isStale ? `Unreachable - last known good data as of ${fmtTime(dev.lastPollAt)}` : "";
 
     row.onclick = (ev) => { if (ev.target.closest("button") || ev.target.closest("input")) return; toggleDetail(dev.ip); };
     row.innerHTML = `
@@ -412,10 +419,10 @@ function renderRow(dev) {
       <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
       <td title="${(cfg.information && cfg.information.type) || ""}">${deviceType(dev)}</td>
       <td>${fw ? fw.semantic_version : "-"}</td>
-      <td style="color:${tempColor};font-weight:600">${hlt.core_temp ?? "-"}&deg;C</td>
-      <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
-      <td><span class="badge ${ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary"}" style="${dev.activeNetwork === "red" ? "outline:2px solid #212529;" : ""}" title="${dev.activeNetwork === "red" ? "Currently communicating via Red" : ""}">${(ifs.e1 && ifs.e1.link_status) || "-"}</span></td>
-      <td><span class="badge ${ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary"}" style="${dev.activeNetwork === "blue" ? "outline:2px solid #212529;" : ""}" title="${dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : ""}">${(ifs.e2 && ifs.e2.link_status) || "-"}</span></td>
+      <td style="color:${isStale ? "#adb5bd" : tempColor};font-weight:600" title="${isStale ? staleTitle + (hlt.core_temp != null ? " (" + hlt.core_temp + "°C)" : "") : ""}">${isStale ? "-" : (hlt.core_temp ?? "-")}&deg;C</td>
+      <td><span class="badge ${isStale ? "secondary" : (refclk.status === "locked" ? "success" : "danger")}" title="${isStale ? staleTitle : ""}">${isStale ? "-" : (refclk.status || "?")}</span></td>
+      <td><span class="badge ${isStale ? "secondary" : (ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "red" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "red" ? "Currently communicating via Red" : "")}">${isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-")}</span></td>
+      <td><span class="badge ${isStale ? "secondary" : (ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "blue" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : "")}">${isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-")}</span></td>
       <td>${(() => {
         const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
         if (warnings.length) return `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`;
