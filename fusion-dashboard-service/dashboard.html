@@ -120,6 +120,7 @@
                     <th></th>
                     <th class="sortable" data-key="ip">IP<span class="sort-arrow"></span></th>
                     <th class="sortable" data-key="name">Name<span class="sort-arrow"></span></th>
+                    <th class="sortable" data-key="type" title="Device family, from self/information (Fusion gateway or MuoN card)">Type<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="type" title="Filter">&#9662;</button></th>
                     <th class="sortable" data-key="fw">FW<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="fw" title="Filter">&#9662;</button></th>
                     <th class="sortable" data-key="temp">Temp<span class="sort-arrow"></span></th>
                     <th class="sortable" data-key="ptp">PTP<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="ptp" title="Filter">&#9662;</button></th>
@@ -151,7 +152,18 @@ let lastData = { devices: [] };
 let sortKey = "ip";
 let sortDir = "asc";
 let columnFilters = {}; // key -> Set of allowed values; absent = no restriction
-const FILTERABLE_COLUMNS = ["fw", "ptp", "red", "blue", "warn", "nmos", "syslog"];
+const FILTERABLE_COLUMNS = ["type", "fw", "ptp", "red", "blue", "warn", "nmos", "syslog"];
+
+// Device family from self/information.base_type ("FusioN6", "MuoN B", ...).
+// MuoN cards speak the same emsfp API as the Fusion gateways; they just
+// have no fan, no OOB port and no /port SFP breakdown.
+function deviceType(dev) {
+    const base = ((dev.config && dev.config.information && dev.config.information.base_type) || "").trim();
+    if (!base) return "-";
+    if (/^fusion/i.test(base)) return "Fusion";
+    if (/^muon/i.test(base)) return "MuoN";
+    return base;
+}
 
 // Single source of truth for what each column shows, used by both sorting
 // and filtering so they always agree with what's rendered in the cell.
@@ -170,6 +182,7 @@ function columnValue(dev, key) {
     switch (key) {
         case "ip": return dev.ip.split(".").map(Number);
         case "name": return ((cfg.ipconfig && cfg.ipconfig.hostname) || dev.name || "").toLowerCase();
+        case "type": return deviceType(dev);
         case "fw": return fw ? fw.semantic_version : "-";
         case "temp": return hlt.core_temp ?? null;
         case "ptp": return refclk.status || "-";
@@ -336,7 +349,7 @@ function cssId(ip) { return ip.replace(/\./g, "-"); }
 
 async function rebootDevice(ip) {
     if (!confirm(
-        "Reboot Fusion device " + ip + "?\n\n" +
+        "Reboot device " + ip + "?\n\n" +
         "This restarts the unit and will interrupt its SDI/IP signal for a short " +
         "time. Only do this if you know this device is safe to take down right now.\n\n" +
         "This action is unverified against the live API (inferred from the " +
@@ -397,6 +410,7 @@ function renderRow(dev) {
       <td>${statusDot(dev.status)}</td>
       <td style="font-family:monospace">${dev.ip}</td>
       <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
+      <td title="${(cfg.information && cfg.information.type) || ""}">${deviceType(dev)}</td>
       <td>${fw ? fw.semantic_version : "-"}</td>
       <td style="color:${tempColor};font-weight:600">${hlt.core_temp ?? "-"}&deg;C</td>
       <td><span class="badge ${refclk.status === "locked" ? "success" : "danger"}">${refclk.status || "?"}</span></td>
@@ -418,7 +432,7 @@ function renderRow(dev) {
     };
 
     detail.innerHTML = `
-      <td colspan="13">
+      <td colspan="14">
         <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
           <button class="btn" id="closeDetail-${id}" title="Close">&times; Close</button>
         </div>
@@ -426,12 +440,13 @@ function renderRow(dev) {
         ${dev.activeNetwork === "blue" ? `<div class="alert" style="background:#cfe2ff; color:#084298;">Communicating via Blue (backup) - Red is not responding right now.</div>` : ""}
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start">
           <div class="small" style="min-width:260px">
+            <div>Type: ${(cfg.information && cfg.information.type) || "-"}${cfg.information && cfg.information.base_type ? " (" + cfg.information.base_type + ")" : ""}</div>
             <div>Serial number: ${(cfg.information && cfg.information.serial_number) || "-"}</div>
             <div>MAC: ${(cfg.ipconfig && cfg.ipconfig.local_mac) || "-"}</div>
             <div>Red IP: ${(cfg.interfaces && cfg.interfaces.e1 && cfg.interfaces.e1.current_ip) || "-"} (${(ifs.e1 && fmtBw(ifs.e1.rx_bw)) || "-"} rx)</div>
             <div>Blue IP: ${(cfg.interfaces && cfg.interfaces.e2 && cfg.interfaces.e2.current_ip) || "-"} (${(ifs.e2 && fmtBw(ifs.e2.rx_bw)) || "-"} rx)</div>
             <div>NMOS registry: ${nmos.registry_address || "-"}</div>
-            <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns, fan: ${hlt.fan_speed ?? "-"} rpm</div>
+            <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns${hlt.fan_speed !== undefined ? `, fan: ${hlt.fan_speed} rpm` : ""}</div>
             ${warnings.length ? `<div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
               <span>Warnings: ${warnings.map(w => `code ${w.code}${w.uuid ? " (" + w.uuid.join(", ") + ")" : ""}`).join("; ")}</span>
               <button class="btn" id="dismissWarnings-${id}" title="Close">&times;</button>
@@ -439,7 +454,7 @@ function renderRow(dev) {
             <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
             <div class="muted small" style="margin-top:4px">Config loaded: ${fmtTime(dev.configFetchedAt)}${dev.configError ? " - error: " + dev.configError : ""}</div>
           </div>
-          <div>${portsTable(cfg.ports)}</div>
+          <div>${deviceType(dev) === "MuoN" ? '<span class="muted small">no SFP port breakdown on MuoN cards</span>' : portsTable(cfg.ports)}</div>
           <div style="margin-left:auto">
             <button class="btn danger" id="reboot-${id}" title="Reboot this device">Reboot</button>
           </div>

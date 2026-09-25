@@ -23,6 +23,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoDir = $PSScriptRoot
 $TaskName = "PLSFusionDashboardService"
+$ServerPy = Join-Path $RepoDir "fusion-dashboard-service\server.py"
 
 if (-not (Test-Path (Join-Path $RepoDir ".git"))) {
     throw "This folder ($RepoDir) is not a git checkout. Run this script from the root of a 'git clone' of the RiedelFusionDashboard repo, or update by copying files manually (see README.txt under 'Upgrading')."
@@ -50,8 +51,10 @@ if ($taskExists) {
     }
     if ((Get-ScheduledTask -TaskName $TaskName).State -eq "Running") {
         Write-Host "Task still reports Running after 15s - stopping the python process directly..." -ForegroundColor Yellow
+        # Match this service's own server.py by full path - other tools on
+        # this PC (e.g. the MuoN config tool) also run a server.py.
         Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.CommandLine -like "*server.py*" } |
+            Where-Object { $_.CommandLine -like "*$ServerPy*" } |
             ForEach-Object {
                 Write-Host "  Killing PID $($_.ProcessId)"
                 Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
