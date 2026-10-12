@@ -576,6 +576,7 @@ function renderRow(dev) {
           </div>
         </div>
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; border-top:1px solid #e9ecef; padding-top:10px;">
+          ${sdiBitrateHtml(dev, id)}
           <div>
             <div class="small" style="font-weight:600; margin-bottom:4px;">
               Color bars <button class="btn" id="colorBarLoad-${id}">${colorBarCache[dev.ip] ? "↻ Refresh" : "Load"}</button>
@@ -591,6 +592,7 @@ function renderRow(dev) {
           </div>
         </div>
       </td>`;
+    wireSdiBitrate(dev, id);
     document.getElementById("reboot-" + id).onclick = (ev) => { ev.stopPropagation(); rebootDevice(dev.ip); };
     document.getElementById("closeDetail-" + id).onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
     const dismissBtn = document.getElementById("dismissWarnings-" + id);
@@ -853,6 +855,60 @@ async function resetChannel(ip, id, channel, mode) {
         await loadStreams(ip, id);
     } catch (e) {
         alert("Failed to send reset: " + e.message);
+    }
+}
+
+// SDI operating bit rate (integer / fractional / auto), per device. A choice
+// that hasn't been applied yet is kept in sdiPending, because the detail row
+// is re-rendered on every 4s refresh and would otherwise snap back.
+const SDI_BITRATE_MODES = ["integer", "fractional", "auto"];
+const sdiPending = {};
+function sdiBitrateHtml(dev, id) {
+    const sdi = dev.config && dev.config.sdi;
+    if (!sdi || !sdi.configuration) {
+        return `<div><div class="small" style="font-weight:600; margin-bottom:4px;">SDI bitrate</div><span class="muted small">${deviceType(dev) === "MuoN" ? "not available on MuoN cards" : "no data"}</span></div>`;
+    }
+    const cur = sdi.configuration.operating_bit_rate;
+    const chosen = sdiPending[dev.ip] || cur;
+    const running = sdi.running_operating_bit_rate;
+    const opts = SDI_BITRATE_MODES.map(m => `<option value="${m}"${m === chosen ? " selected" : ""}>${m}</option>`).join("");
+    return `<div>
+      <div class="small" style="font-weight:600; margin-bottom:4px;">SDI bitrate</div>
+      <select id="sdiBitrate-${id}" title="integer = 50/60 Hz families, fractional = 59.94/29.97 (1000/1001) families, auto = follow the signal">${opts}</select>
+      <button class="btn" id="sdiBitrateApply-${id}"${chosen === cur ? " disabled" : ""}>Apply</button>
+      <div class="muted small" style="margin-top:3px">set: <b>${cur}</b>, running: <b>${running ?? "-"}</b></div>
+    </div>`;
+}
+function wireSdiBitrate(dev, id) {
+    const sel = document.getElementById("sdiBitrate-" + id);
+    if (!sel) return;
+    sel.onclick = (ev) => ev.stopPropagation();
+    sel.onchange = () => {
+        sdiPending[dev.ip] = sel.value;
+        document.getElementById("sdiBitrateApply-" + id).disabled = sel.value === dev.config.sdi.configuration.operating_bit_rate;
+    };
+    document.getElementById("sdiBitrateApply-" + id).onclick = (ev) => { ev.stopPropagation(); applySdiBitrate(dev.ip, id, sel.value); };
+}
+async function applySdiBitrate(ip, id, value) {
+    if (!confirm(
+        "Set the SDI bitrate of " + ip + " to \"" + value + "\"?\n\n" +
+        "This is the global SDI operating bit rate of the whole device (integer = 50/60 Hz families, fractional = 59.94 / 29.97, auto = follow the signal). " +
+        "The SDI outputs may re-lock and glitch briefly. Only do this if the device is safe to touch right now."
+    )) return;
+    try {
+        const res = await fetch("/api/devices/sdi-bitrate", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, value })
+        });
+        const data = await res.json();
+        if (!data.ok) { alert("Failed: " + (data.error || "unknown error")); return; }
+        delete sdiPending[ip];
+        const got = data.sdi && data.sdi.configuration && data.sdi.configuration.operating_bit_rate;
+        alert("Sent to " + ip + " (via " + (data.network || "?") + ").\n\nThe device now reports: set = " + got + ", running = " + (data.sdi && data.sdi.running_operating_bit_rate) +
+              (got !== value ? "\n\nNote: that is not what was requested - the device did not take this value." : ""));
+        await refresh();
+    } catch (e) {
+        alert("Failed to set the SDI bitrate: " + e.message);
     }
 }
 

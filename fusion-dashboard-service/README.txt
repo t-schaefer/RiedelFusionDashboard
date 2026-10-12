@@ -186,6 +186,17 @@ answered (service.log) so the request body can be adjusted.
 
 Dashboard controls
 -------------------
+SDI bitrate (per device, expanded row, left of Color bars) - the global SDI
+    operating bit rate of one Fusion: integer (50/60 Hz families), fractional
+    (59.94 / 29.97 = 1000/1001 families) or auto (follow the signal). Shows
+    what is set and what the device is actually running; pick a value and
+    click Apply (asks first - the SDI outputs may re-lock). The device is read
+    back afterwards and the dialog says if it did not take the value. Same
+    POST as the old config tool's "Set Bitrate" (/sdi/ {"configuration":
+    {"operating_bit_rate": ...}}); "auto" is new in this tool but is the value
+    about half of the fleet is already set to. Not on MuoN cards (no /sdi).
+    The value is read with the 10-minute config refresh.
+
 Group buttons (bar above the table, "Group: All / GFX / ...") - show one device group:
     GFX, ST1, CS Rooms, REPLAY, ASX, DCR/DCB, GR, MC, OC, PCR, SCR
     (plus "Other" if a device name matches none). The group comes from the

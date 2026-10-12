@@ -278,6 +278,32 @@ def set_color_bar(ip, sdi_output_id, value):
     return status, body, used_net
 
 
+SDI_BITRATE_MODES = ("integer", "fractional", "auto")
+
+
+def set_sdi_bitrate(ip, value):
+    """
+    Global SDI operating bit rate of one Fusion: POST /sdi/
+    {"configuration": {"operating_bit_rate": value}} - the same call the old
+    config tool's "Set Bitrate" makes, with the values the devices report in
+    GET /sdi/: "integer" (50 / 60 Hz families), "fractional" (59.94 / 29.97
+    ... 1000/1001 families) and "auto" (seen live on ~half of the fleet).
+    The tool only ever offered integer / fractional; "auto" is accepted
+    because devices are already configured to it. Changing it can make the
+    SDI outputs re-lock, so the UI asks first. The setting is read back and
+    returned so the UI shows what the device really holds (configuration)
+    and what it is actually running (running_operating_bit_rate).
+    """
+    if value not in SDI_BITRATE_MODES:
+        raise ValueError("value must be one of %s" % ", ".join(SDI_BITRATE_MODES))
+    (status, body), used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_post(addr, "/emsfp/node/v1/sdi/", {"configuration": {"operating_bit_rate": value}}, REQUEST_TIMEOUT_SEC)
+    )
+    time.sleep(0.5)
+    after = http_get_json(used_ip, "/emsfp/node/v1/sdi/", REQUEST_TIMEOUT_SEC)
+    return status, body, used_net, after
+
+
 # Short essence letters used in stream names: V01, A01..A04, D01 (D = data /
 # ancillary).
 ESSENCE_LETTER = {"video": "V", "audio": "A", "ancillary": "D"}
@@ -650,6 +676,7 @@ def fetch_device_config(ip):
         interfaces = safe("/emsfp/node/v1/self/interfaces")
         nmos = safe("/emsfp/node/v1/self/diag/nmos")
         syslog = safe("/emsfp/node/v1/self/syslog")
+        sdi = safe("/emsfp/node/v1/sdi/")   # SDI operating bit rate; MuoN cards don't have it (None)
 
         ports = []
         try:
@@ -673,6 +700,7 @@ def fetch_device_config(ip):
                 "interfaces": interfaces,
                 "nmos": nmos,
                 "syslog": syslog,
+                "sdi": sdi,
                 "ports": ports,
             }
             rec["configError"] = None
@@ -929,6 +957,24 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, 404)
             except Exception as e:
                 logger.error("enable flows failed for %s / CH%02d: %s", ip, channel, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/sdi-bitrate":
+            ip = (data.get("ip") or "").strip()
+            value = (data.get("value") or "").strip()
+            if not ip or ip not in STATE or value not in SDI_BITRATE_MODES:
+                self._send_json({"ok": False, "error": "valid ip and value (%s) are required" % ", ".join(SDI_BITRATE_MODES)}, 400)
+                return
+            logger.warning("SDI bitrate -> %s requested for %s via API", value, ip)
+            try:
+                status, body, used_net, after = set_sdi_bitrate(ip, value)
+                logger.warning("SDI bitrate for %s (via %s): HTTP %s %s, now %s", ip, used_net, status, body[:200], after)
+                with STATE_LOCK:
+                    rec = STATE.get(ip)
+                    if rec and rec.get("config") is not None:
+                        rec["config"]["sdi"] = after
+                self._send_json({"ok": True, "httpStatus": status, "network": used_net, "sdi": after})
+            except Exception as e:
+                logger.error("SDI bitrate change failed for %s: %s", ip, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/counters-reset":
             ip = (data.get("ip") or "").strip()
