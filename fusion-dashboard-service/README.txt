@@ -216,6 +216,12 @@ Pause polling (global) - top-right button. Stops the background health/config
     running service, not per-browser). Use this if you need to quiet things
     down, e.g. while debugging something else on the network.
 
+Remove from dashboard (per device, in the expanded row) - drops the device from
+    devices.json and stops polling it; the device itself is not touched.
+    Asks first. A device that came from devices.example.json stays removed
+    after a restart or update (devices.seeded.json remembers it was offered);
+    add it back any time with "+ Device".
+
 Reboot (per device, in the expanded row) - sends a reboot command to that one
     Fusion unit. This interrupts its SDI/IP signal briefly. A confirmation
     dialog is shown before anything is sent. IMPORTANT: the underlying API

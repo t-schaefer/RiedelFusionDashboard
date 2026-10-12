@@ -457,6 +457,25 @@ function toggleDetail(ip) {
 
 function cssId(ip) { return ip.replace(/\./g, "-"); }
 
+async function removeDevice(ip, name) {
+    if (!confirm(
+        "Remove " + name + " (" + ip + ") from the dashboard?\n\n" +
+        "It stops being polled and disappears from the list. The device itself is not touched. " +
+        "You can add it again any time with \"+ Device\"."
+    )) return;
+    try {
+        const res = await fetch("/api/devices/delete", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ip })
+        });
+        const data = await res.json();
+        if (!data.ok) { alert("Failed: " + (data.error || "unknown error")); return; }
+        groupBarSig = "";
+        await refresh();
+    } catch (e) {
+        alert("Failed to remove the device: " + e.message);
+    }
+}
+
 async function rebootDevice(ip) {
     if (!confirm(
         "Reboot device " + ip + "?\n\n" +
@@ -582,6 +601,7 @@ function renderRow(dev) {
           <div>${deviceType(dev) === "MuoN" ? '<span class="muted small">no SFP port breakdown on MuoN cards</span>' : portsTable(cfg.ports)}</div>
           <div style="margin-left:auto">
             <button class="btn danger" id="reboot-${id}" title="Reboot this device">Reboot</button>
+            <button class="btn" id="removeDevice-${id}" title="Remove this device from the dashboard (the device itself is not touched)">Remove from dashboard</button>
           </div>
         </div>
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; border-top:1px solid #e9ecef; padding-top:10px;">
@@ -602,6 +622,7 @@ function renderRow(dev) {
         </div>
       </td>`;
     wireSdiBitrate(dev, id);
+    document.getElementById("removeDevice-" + id).onclick = (ev) => { ev.stopPropagation(); removeDevice(dev.ip, displayName); };
     document.getElementById("reboot-" + id).onclick = (ev) => { ev.stopPropagation(); rebootDevice(dev.ip); };
     document.getElementById("closeDetail-" + id).onclick = (ev) => { ev.stopPropagation(); detail.classList.add("hidden"); };
     const dismissBtn = document.getElementById("dismissWarnings-" + id);

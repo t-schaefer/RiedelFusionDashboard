@@ -875,10 +875,19 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
         elif self.path == "/api/devices/delete":
             ip = (data.get("ip") or "").strip()
+            if not ip or ip not in STATE:
+                self._send_json({"ok": False, "error": "unknown device"}, 400)
+                return
+            # Only removes it from this dashboard (devices.json + live state);
+            # the device itself is not touched. A device that came from
+            # devices.example.json does not come back on restart, because
+            # devices.seeded.json remembers it was already offered.
             with STATE_LOCK:
                 STATE.pop(ip, None)
-                devices = [d for d in load_devices() if d["ip"] != ip]
+                with open(DEVICES_FILE, "r", encoding="utf-8") as f:
+                    devices = [d for d in json.load(f) if d["ip"] != ip]
                 save_devices(devices)
+            logger.warning("device %s removed from the dashboard via API (%d left)", ip, len(devices))
             self._send_json({"ok": True})
         elif self.path == "/api/devices/reboot":
             ip = (data.get("ip") or "").strip()
