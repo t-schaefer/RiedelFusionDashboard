@@ -121,8 +121,10 @@ that output in place of the live picture, so it asks for confirmation
 first - only do this if you know that output isn't on air.
 
 Stream rates: live packet rate / sequence-error count per flow
-(/telemetry/devices), one row per channel/essence/leg, with the short flow
-ID (hover for the full one).
+(/telemetry/devices), one row per channel/essence/leg. Each row is named
+like "Ch01 - Video 01" / "Ch01 - Audio 03": channel, essence, and the n-th
+engine of that essence on the channel in the order the device lists them.
+The short flow ID is shown too (hover for the full one).
 
 Flow resets (in the Stream rates table / header)
   Clr          per flow: clears just that flow's packet / sequence-error

@@ -647,8 +647,8 @@ function streamsSectionHtml(ip) {
           `<button class="btn danger flowResetBtn" data-flow="${s.flow}" data-mode="flow" title="Reset the flow itself - may glitch that stream while it re-locks">Reset</button>`
         : "";
     return `<div style="max-height:220px; overflow-y:auto;"><table class="mini-table">` +
-        "<thead><tr><th>Ch</th><th>Type</th><th>Essence</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +
-        cached.streams.map(s => `<tr><td>${s.channel ?? "-"}</td><td>${s.type || "-"}</td><td>${s.essence || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${resetCell(s)}</td></tr>`).join("") +
+        "<thead><tr><th>Ch</th><th>Name</th><th>Essence</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +
+        cached.streams.map(s => `<tr><td>${s.channel ?? "-"}</td><td>${s.name || "-"}</td><td>${s.essence || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${resetCell(s)}</td></tr>`).join("") +
         "</tbody></table></div>" +
         `<div class="muted small" style="margin-top:4px">via ${cached.network || "?"}</div>`;
 }

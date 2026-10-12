@@ -259,11 +259,19 @@ def get_stream_rates(ip):
     )
     rows = []
     for chan in (data or {}).get("devices", []):
+        ch = chan.get("channel")
+        ch_label = "Ch%02d" % ch if isinstance(ch, int) else "Ch--"
+        seen = {}  # essence -> how many engines of it already named on this channel
         for engine in chan.get("engines", []):
+            essence = engine.get("essence") or "stream"
+            seen[essence] = seen.get(essence, 0) + 1
+            # e.g. "Ch01 - Video 01", "Ch01 - Audio 03": the n-th engine of
+            # that essence on the channel, in the order the device lists them.
+            name = "%s - %s %02d" % (ch_label, essence.capitalize(), seen[essence])
             for flow in engine.get("flows", []):
                 rows.append({
-                    "channel": chan.get("channel"),
-                    "type": chan.get("type"),
+                    "channel": ch,
+                    "name": name,
                     "essence": engine.get("essence"),
                     "leg": flow.get("type"),
                     "flow": flow.get("flow"),
