@@ -105,11 +105,11 @@
 
     <div id="warningsPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div class="small muted">Devices currently reporting warnings. Click a row to jump to that device.</div>
+            <div class="small muted">Devices reporting warnings or info-level notes (real warnings first). Click a row to jump to that device.</div>
             <button class="btn" id="closeWarningsPanelBtn" title="Close">&times; Close</button>
         </div>
         <table class="mini-table" style="width:100%">
-            <thead><tr><th>IP</th><th>Name</th><th>Codes</th></tr></thead>
+            <thead><tr><th>IP</th><th>Name</th><th>Details</th></tr></thead>
             <tbody id="warningsPanelBody"></tbody>
         </table>
     </div>
@@ -166,6 +166,38 @@ function deviceType(dev) {
     return base;
 }
 
+// Warnings come from the device as {code, uuid:[...]} and the service adds
+// severity "info" | "warning" (see WARNING_SEVERITY in server.py). The only
+// code ever seen is 1001: a timing / line-offset status flag on one SDI
+// *output*. The output UUIDs are identical on every device (b0=SDI 1,
+// b1=SDI 2, b2=SDI 3, b3=SDI 4, b5=SDI 6, b7=SDI 8; b4/b6 are SDI inputs and
+// SDI n belongs to channel CHn), so they can be named without extra queries.
+// Anything that doesn't match falls back to the raw code + UUID.
+const SDI_OUTPUT_UUID_RE = /^b([0123567])d2da17-360a-4396-80a9-f620c4bb3885\/?$/;
+const WARN_1001_TIP = "Code 1001: this SDI output's timing (line-offset) status flag is set. Across the fleet it mostly shows up while video is arriving normally, so it is NOT a 'stream down' indicator. The vendor doesn't document it.";
+
+function describeWarning(w) {
+    const sev = w.severity || "warning";
+    const uuids = Array.isArray(w.uuid) ? w.uuid : (w.uuid ? [w.uuid] : []);
+    if (w.code === 1001) {
+        const outs = uuids.map(u => {
+            const m = SDI_OUTPUT_UUID_RE.exec(String(u));
+            if (!m) return String(u).slice(0, 8);
+            const n = parseInt(m[1], 10) + 1;
+            return "SDI " + n + " (CH" + String(n).padStart(2, "0") + ")";
+        });
+        return { sev, text: (outs.length ? outs.join(", ") + ": " : "") + "output timing status flag set (1001)", tip: WARN_1001_TIP };
+    }
+    return { sev, text: "code " + w.code + (uuids.length ? " (" + uuids.join(", ") + ")" : ""), tip: "Unrecognised warning code" };
+}
+function splitWarnings(list) {
+    list = list || [];
+    return {
+        real: list.filter(w => (w.severity || "warning") === "warning"),
+        info: list.filter(w => w.severity === "info")
+    };
+}
+
 // Single source of truth for what each column shows, used by both sorting
 // and filtering so they always agree with what's rendered in the cell.
 function columnValue(dev, key) {
@@ -190,7 +222,12 @@ function columnValue(dev, key) {
         case "ptp": return isStale ? "-" : (refclk.status || "-");
         case "red": return isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-");
         case "blue": return isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-");
-        case "warn": return warnings.length ? "warning" : (bothLinksDown ? "offline" : "OK");
+        case "warn": {
+            const sw = splitWarnings(warnings);
+            if (sw.real.length) return "warning";
+            if (bothLinksDown) return "offline";
+            return sw.info.length ? "info" : "OK";
+        }
         case "nmos": return nmos.status || "-";
         case "syslog": return syslogCfg.enable ? "on" : "off";
         case "lastpoll": return dev.lastPollAt || "";
@@ -426,8 +463,10 @@ function renderRow(dev) {
       <td><span class="badge ${isStale ? "secondary" : (ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "blue" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : "")}">${isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-")}</span></td>
       <td>${(() => {
         const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
-        if (warnings.length) return `<span class="badge warning" style="cursor:pointer" title="Click for details - ${warnings.map(w => "code " + w.code).join(", ")}">${warnings.length}</span>`;
+        const sw = splitWarnings(warnings);
+        if (sw.real.length) return `<span class="badge warning" style="cursor:pointer" title="Click for details - ${sw.real.map(w => describeWarning(w).text).join("; ")}">${sw.real.length}</span>`;
         if (bothLinksDown) return `<span class="badge danger">offline</span>`;
+        if (sw.info.length) return `<span class="badge secondary" style="cursor:pointer" title="Click for details - ${sw.info.map(w => describeWarning(w).text).join("; ")}">${sw.info.length} info</span>`;
         return `<span class="badge success">OK</span>`;
       })()}</td>
       <td><span class="badge ${nmos.status === "connected" ? "success" : "secondary"}">${nmos.status || "-"}</span></td>
@@ -456,7 +495,7 @@ function renderRow(dev) {
             <div>NMOS registry: ${nmos.registry_address || "-"}</div>
             <div>PTP offset: ${refclk.offset_from_master ?? "-"} ns${hlt.fan_speed !== undefined ? `, fan: ${hlt.fan_speed} rpm` : ""}</div>
             ${warnings.length ? `<div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
-              <span>Warnings: ${warnings.map(w => `code ${w.code}${w.uuid ? " (" + w.uuid.join(", ") + ")" : ""}`).join("; ")}</span>
+              <span>${warnings.map(w => { const d = describeWarning(w); return `<span title="${d.tip}">${d.sev === "info" ? "Info" : "Warning"}: ${d.text}</span>`; }).join("<br>")}</span>
               <button class="btn" id="dismissWarnings-${id}" title="Close">&times;</button>
             </div>` : ""}
             <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
@@ -515,11 +554,14 @@ function renderSummary(summary) {
     document.getElementById("summaryBar").innerHTML =
         `<span class="badge success" id="onlineSummaryBadge" style="cursor:pointer; ${ring("online")}" title="Click to show only online devices">${summary.online || 0} online</span> ` +
         `<span class="badge warning" id="warningSummaryBadge" style="cursor:pointer" title="Click to list devices with warnings">${summary.warning || 0} warning</span> ` +
+        (summary.info ? `<span class="badge secondary" id="infoSummaryBadge" style="cursor:pointer" title="Devices with info-level notes (not counted as warnings) - click to list">${summary.info} info</span> ` : "") +
         `<span class="badge danger" id="offlineSummaryBadge" style="cursor:pointer; ${ring("offline")}" title="Click to show only offline devices">${summary.offline || 0} offline</span> ` +
         (summary.unknown ? `<span class="badge secondary">${summary.unknown} unknown</span> ` : "") +
         `<span class="muted small">${summary.total || 0} devices total</span>` +
         (statusFilter ? ` <button class="btn" id="clearStatusFilterBtn" style="margin-left:6px;">&times; clear filter</button>` : "");
     document.getElementById("warningSummaryBadge").onclick = toggleWarningsPanel;
+    const infoBadge = document.getElementById("infoSummaryBadge");
+    if (infoBadge) infoBadge.onclick = toggleWarningsPanel;
     document.getElementById("onlineSummaryBadge").onclick = () => setStatusFilter("online");
     document.getElementById("offlineSummaryBadge").onclick = () => setStatusFilter("offline");
     const clearBtn = document.getElementById("clearStatusFilterBtn");
@@ -527,16 +569,21 @@ function renderSummary(summary) {
 }
 
 function renderWarningsPanel(devices) {
-    const withWarnings = devices.filter(d => d.health && d.health.warnings && d.health.warnings.length);
+    const withWarnings = devices
+        .filter(d => d.status !== "offline" && d.health && d.health.warnings && d.health.warnings.length)
+        .sort((a, b) => (splitWarnings(b.health.warnings).real.length > 0) - (splitWarnings(a.health.warnings).real.length > 0));
     const body = document.getElementById("warningsPanelBody");
     if (!withWarnings.length) {
-        body.innerHTML = `<tr><td colspan="3" class="muted small">No devices currently reporting warnings.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="3" class="muted small">No devices currently reporting warnings or notes.</td></tr>`;
         return;
     }
     body.innerHTML = withWarnings.map(d => {
-        const codes = d.health.warnings.map(w => "code " + w.code).join(", ");
+        const details = d.health.warnings.map(w => {
+            const x = describeWarning(w);
+            return `<span title="${x.tip}"><span class="badge ${x.sev === "info" ? "secondary" : "warning"}">${x.sev === "info" ? "info" : "warning"}</span> ${x.text}</span>`;
+        }).join("<br>");
         const name = (d.config && d.config.ipconfig && d.config.ipconfig.hostname) || d.name || "-";
-        return `<tr style="cursor:pointer" data-ip="${d.ip}"><td style="font-family:monospace">${d.ip}</td><td>${name}</td><td>${codes}</td></tr>`;
+        return `<tr style="cursor:pointer" data-ip="${d.ip}"><td style="font-family:monospace">${d.ip}</td><td>${name}</td><td>${details}</td></tr>`;
     }).join("");
     body.querySelectorAll("tr[data-ip]").forEach(row => {
         row.onclick = () => focusDevice(row.dataset.ip);

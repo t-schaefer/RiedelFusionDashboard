@@ -450,6 +450,25 @@ def reset_device_counters(ip):
     return status, body, used_net
 
 
+# Warning codes the device reports under /telemetry/warnings, with how much
+# they should count. Only 1001 has ever been seen. A fleet-wide read-only
+# check (21 warnings on 15 devices) found it always refers to an SDI
+# *output* and always coincides with that output's line_offset.status == 1
+# (91 of 91 warned-vs-unwarned pairs on the same device) - a timing /
+# line-offset status flag. In 20 of the 21 cases the channel's video
+# receiver was enabled and ~189k pkt/s were arriving, so it is NOT a "stream
+# down" indicator and must not turn the device yellow. The vendor doesn't
+# document the code, so anything not listed here stays a real warning.
+WARNING_SEVERITY = {1001: "info"}
+
+
+def classify_warnings(warnings):
+    """Tags each warning with severity 'info' | 'warning' (unknown codes = 'warning')."""
+    for w in warnings:
+        w["severity"] = WARNING_SEVERITY.get(w.get("code"), "warning")
+    return warnings
+
+
 def poll_device_health(ip):
     with STATE_LOCK:
         if ip in INFLIGHT:
@@ -473,8 +492,9 @@ def poll_device_health(ip):
             rec = STATE.get(ip)
             if rec is None:
                 return
+            classify_warnings(warnings)
             rec["health"] = {"node": node, "warnings": warnings}
-            rec["status"] = "warning" if warnings else "online"
+            rec["status"] = "warning" if any(w["severity"] == "warning" for w in warnings) else "online"
             rec["lastError"] = None
             rec["activeNetwork"] = used_net
     except Exception as e:
@@ -586,6 +606,11 @@ def snapshot():
     for d in devices:
         summary[d["status"]] = summary.get(d["status"], 0) + 1
     summary["total"] = len(devices)
+    summary["info"] = sum(
+        1 for d in devices
+        if d["status"] != "offline"
+        and any(w.get("severity") == "info" for w in ((d.get("health") or {}).get("warnings") or []))
+    )
     return {
         "generatedAt": now_iso(),
         "pollIntervalSec": POLL_INTERVAL_SEC,

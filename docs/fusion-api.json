@@ -606,7 +606,7 @@
       "path": "/telemetry/warnings/{n}",
       "methods": ["GET"],
       "source": "discovered",
-      "description": "Active warning codes and the affected resource UUID(s). Code 1001 was observed live on two SDI outputs (meaning not yet confirmed against vendor docs -- worth cross-checking, likely a signal-related warning such as loss-of-input or reference-lock issue).",
+      "description": "Active warning codes and the affected resource UUID(s). Code 1001 is NOT a stream-down alarm: it flags an SDI output whose line_offset.status (GET /sdi_output/{id}) is 1, i.e. an output timing status flag. In a fleet scan 20 of 21 affected outputs still had video arriving. Output UUIDs are identical on every device: b0d2da17-... = SDI 1, b1 = SDI 2, b2 = SDI 3, b3 = SDI 4, b5 = SDI 6, b7 = SDI 8 (b4/b6 are SDI inputs); SDI n belongs to channel CHn. The dashboard shows it as 'SDI n (CHnn): output timing status flag set' and treats it as info severity, not a warning.",
       "response_sample": { "warning": [ { "code": 1001, "uuid": ["b7d2da17-360a-4396-80a9-f620c4bb3885/"] }, { "code": 1001, "uuid": ["b5d2da17-360a-4396-80a9-f620c4bb3885/"] } ] }
     }
   ],

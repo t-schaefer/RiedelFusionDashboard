@@ -186,6 +186,25 @@ Syslog (all devices) - toolbar button, opens a form to push one syslog
     per-device confirmation step, only the one fleet-wide confirmation
     dialog, so double-check the server/port before clicking Apply.
 
+Warning severity (Warn column)
+-------------------------------
+The Warn column distinguishes real warnings from informational flags:
+    yellow badge   real warning (device status "warning")
+    red "offline"  both links down
+    grey "N info"  informational flag only - the device stays green/online
+
+Currently the only code ever seen on the fleet is 1001, classified as info
+(WARNING_SEVERITY in server.py; add a code there with "warning" or "info" to
+change how it is treated - unknown codes default to "warning"). 1001 is NOT
+a "stream down" alarm: it means the timing (line_offset) status flag of one
+SDI output is set, and 20 of 21 affected outputs in a fleet scan still had
+video arriving. The dashboard names the output without any extra queries,
+e.g. "SDI 8 (CH08): output timing status flag set (1001)", since the output
+UUIDs are the same on every device (SDI 1/2/3/4/6/8 = b0/b1/b2/b3/b5/b7).
+The summary bar shows a grey "N info" badge that opens the warnings panel.
+"Show only problems" ignores info-only devices. Real stream-down detection
+would need extra per-device polling and was deliberately not added.
+
 Temperature colour thresholds
 -------------------------------
 In the Temp column of the dashboard (dashboard.html, search "tempColor"):
