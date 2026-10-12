@@ -121,7 +121,27 @@ that output in place of the live picture, so it asks for confirmation
 first - only do this if you know that output isn't on air.
 
 Stream rates: live packet rate / sequence-error count per flow
-(/telemetry/devices), one row per channel/essence/leg. Read-only.
+(/telemetry/devices), one row per channel/essence/leg, with the short flow
+ID (hover for the full one).
+
+Flow resets (in the Stream rates table / header)
+  Clr          per flow: clears just that flow's packet / sequence-error
+               counters (/self/diag/flow/{id} reset_counter). The stream
+               itself is not touched.
+  Reset        per flow: resets the flow itself (same endpoint, "reset"
+               flag). Can glitch that one stream while it re-locks - asks
+               for a stronger confirmation.
+  Reset all counters (button next to Load/Refresh): clears the counters
+               of every flow on that Fusion at once (/self/system
+               counters_reset), for when you don't want to go flow by flow.
+Every reset asks for confirmation first. IMPORTANT: none of these writes
+were ever done by the old tools, so the request bodies are inferred from
+the field names and have NOT been confirmed on a live unit. To make that
+visible rather than silent, a per-flow reset reports the flow's counters
+before and after (and warns if the device still shows a flag stuck at 1);
+the raw result is also in service.log. Try it once on a flow you can
+afford to touch - if the numbers don't drop, note what the device
+answered (service.log) so the request body can be adjusted.
 
 Dashboard controls
 -------------------

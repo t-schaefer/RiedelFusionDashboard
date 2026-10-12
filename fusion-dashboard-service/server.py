@@ -25,6 +25,7 @@ Polling design (why it's built this way - matters at 100+ devices):
 import json
 import logging
 import logging.handlers
+import re
 import threading
 import time
 import urllib.request
@@ -271,6 +272,77 @@ def get_stream_rates(ip):
                     "sequence_error": flow.get("sequence_error"),
                 })
     return rows, used_net
+
+
+# IDs coming from the browser get spliced into a device URL path, so only
+# accept plain UUID-ish tokens (no slashes / dots / query characters).
+_ID_RE = re.compile(r"^[0-9A-Za-z-]{8,64}$")
+
+
+def is_valid_id(value):
+    return bool(value) and bool(_ID_RE.match(value))
+
+
+def _flow_counters(diag):
+    """pkt_cnt / sequence_error per RTP leg from a /self/diag/flow/{id} body."""
+    legs = []
+    for leg in (diag or {}).get("rtp_stream_info", []) or []:
+        st = leg.get("status", {}) or {}
+        legs.append({"pkt_cnt": st.get("pkt_cnt"), "sequence_error": st.get("sequence_error")})
+    return legs
+
+
+def reset_flow(ip, flow_id, mode):
+    """
+    Per-flow reset via /self/diag/flow/{flow_id}, whose GET exposes
+    config: {commit, reset, reset_counter}:
+      mode "counters" -> reset_counter: clears that flow's packet /
+                         sequence-error counters only (non-disruptive).
+      mode "flow"     -> reset: resets the flow itself (may glitch that
+                         stream while it re-locks).
+    The POST body ({"config": {<flag>: "1", "commit": "1"}}) is inferred
+    from the field names - the existing tools never wrote these - so it has
+    NOT been confirmed on a live unit. To make that visible instead of
+    silent, this reads the flow's counters before and after and returns
+    both, plus the config flags as the device reports them afterwards (a flag
+    left at "1" means the device didn't treat it as a momentary trigger).
+    """
+    if mode == "counters":
+        flag = "reset_counter"
+    elif mode == "flow":
+        flag = "reset"
+    else:
+        raise ValueError("mode must be 'counters' or 'flow'")
+    path = "/emsfp/node/v1/self/diag/flow/" + flow_id
+    before, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, path, REQUEST_TIMEOUT_SEC)
+    )
+    status, body = http_post(used_ip, path, {"config": {flag: "1", "commit": "1"}}, REQUEST_TIMEOUT_SEC)
+    time.sleep(0.5)
+    try:
+        after = http_get_json(used_ip, path, REQUEST_TIMEOUT_SEC)
+    except Exception:
+        after = None
+    return {
+        "httpStatus": status,
+        "body": body[:300],
+        "network": used_net,
+        "before": _flow_counters(before),
+        "after": _flow_counters(after),
+        "configAfter": (after or {}).get("config"),
+    }
+
+
+def reset_device_counters(ip):
+    """
+    All flows of one Fusion at once: POST /self/system {"counters_reset": "1"},
+    mirroring the "reboot" flag next to it in the same GET. Inferred from the
+    field name, not confirmed on a live unit (see reset_flow).
+    """
+    (status, body), used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_post(addr, "/emsfp/node/v1/self/system", {"counters_reset": "1"}, REQUEST_TIMEOUT_SEC)
+    )
+    return status, body, used_net
 
 
 def poll_device_health(ip):
@@ -522,8 +594,8 @@ class Handler(BaseHTTPRequestHandler):
             ip = (data.get("ip") or "").strip()
             sdi_output_id = (data.get("sdiOutputId") or "").strip()
             value = bool(data.get("value"))
-            if not ip or ip not in STATE or not sdi_output_id:
-                self._send_json({"ok": False, "error": "ip and sdiOutputId are required"}, 400)
+            if not ip or ip not in STATE or not is_valid_id(sdi_output_id):
+                self._send_json({"ok": False, "error": "valid ip and sdiOutputId are required"}, 400)
                 return
             logger.warning("color_bar=%s requested for %s / %s via API", value, ip, sdi_output_id)
             try:
@@ -531,6 +603,37 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
             except Exception as e:
                 logger.error("color_bar change failed for %s / %s: %s", ip, sdi_output_id, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/flow-reset":
+            ip = (data.get("ip") or "").strip()
+            flow_id = (data.get("flowId") or "").strip()
+            mode = (data.get("mode") or "").strip()
+            if not ip or ip not in STATE or not is_valid_id(flow_id) or mode not in ("counters", "flow"):
+                self._send_json({"ok": False, "error": "valid ip, flowId and mode ('counters' or 'flow') are required"}, 400)
+                return
+            logger.warning("flow reset (%s) requested for %s / %s via API", mode, ip, flow_id)
+            try:
+                result = reset_flow(ip, flow_id, mode)
+                logger.warning(
+                    "flow reset (%s) for %s / %s: HTTP %s, before=%s after=%s configAfter=%s",
+                    mode, ip, flow_id, result["httpStatus"], result["before"], result["after"], result["configAfter"],
+                )
+                self._send_json(dict(result, ok=True))
+            except Exception as e:
+                logger.error("flow reset failed for %s / %s: %s", ip, flow_id, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/counters-reset":
+            ip = (data.get("ip") or "").strip()
+            if not ip or ip not in STATE:
+                self._send_json({"ok": False, "error": "unknown device"}, 400)
+                return
+            logger.warning("counters reset (all flows) requested for %s via API", ip)
+            try:
+                status, body, used_net = reset_device_counters(ip)
+                logger.warning("counters reset for %s (via %s): HTTP %s %s", ip, used_net, status, body[:300])
+                self._send_json({"ok": True, "httpStatus": status, "body": body[:500], "network": used_net})
+            except Exception as e:
+                logger.error("counters reset failed for %s: %s", ip, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/syslog-enable":
             ip = (data.get("ip") or "").strip()

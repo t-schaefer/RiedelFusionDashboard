@@ -215,10 +215,19 @@
     },
     {
       "path": "/self/diag/flow/{flow_id}",
-      "methods": ["GET"],
-      "source": "discovered",
-      "description": "Per-flow diagnostic detail (collection lists same IDs as /flows/).",
-      "response_sample": "not individually captured; collection returns same UUID list as /flows/"
+      "methods": ["GET", "POST (inferred, unverified)"],
+      "source": "discovered; GET captured live on a Fusion 4.8.0 unit",
+      "description": "Per-flow diagnostics (same IDs as /flows/): decoded format, per-RTP-leg counters, and a config block with commit / reset / reset_counter flags. The dashboard's per-flow 'Clr' (reset_counter) and 'Reset' (reset) buttons POST {\"config\": {\"<flag>\": \"1\", \"commit\": \"1\"}} here - that body is inferred from the field names only (no existing tool ever wrote them) and has NOT been confirmed on a live unit; the service reads the counters before and after so the effect is visible.",
+      "response_sample": {
+        "api_info": { "api_version_number": "2" },
+        "format": { "type": "video", "valid": "1", "bit_depth": 10, "range": "NARROW", "tcs": "HLG", "colorimetry": "BT2100", "video_payload_id": "0x89d9a001", "decoded_rtp_pt": 96 },
+        "rtp_stream_info": [
+          { "status": { "pkt_cnt": "356172733", "pkt_rate": "216011", "sequence_error": "0" } },
+          { "status": { "pkt_cnt": "0", "pkt_rate": "0", "sequence_error": "0" } }
+        ],
+        "config": { "commit": "0", "reset": "0", "reset_counter": "0" }
+      },
+      "post_body_sample": { "config": { "reset_counter": "1", "commit": "1" } }
     },
     {
       "path": "/self/diag/packet_interval_time",
