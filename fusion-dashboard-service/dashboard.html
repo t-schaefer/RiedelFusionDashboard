@@ -627,6 +627,7 @@ async function setDeviceSyslogEnable(ip, enable, checkboxEl) {
 // survive the 4s auto-refresh re-render instead of disappearing.
 let colorBarCache = {};
 let streamCache = {};
+let streamGroupOpen = {}; // "<ip>|<channel>" -> true when that CH group is expanded; survives the 4s re-render
 
 function colorBarSectionHtml(ip, id) {
     const cached = colorBarCache[ip];
@@ -667,8 +668,9 @@ function streamsSectionHtml(ip) {
             ? `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
               `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
             : "";
-        body += `<tr class="chHead"><td colspan="5">${label}${dir ? ` <span class="muted">${dir}</span>` : ""} <span class="muted">- ${rows.length} flows, ${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
-        body += rows.map(s => `<tr><td>${s.name || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
+        const open = !!streamGroupOpen[ip + "|" + channel];
+        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:#dc3545;" : "color:#6c757d;"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
+        body += rows.map(s => `<tr class="chRow${open ? "" : " hidden"}" data-ch="${channel}"><td>${s.name || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
     });
     return `<div style="max-height:320px; overflow-y:auto;"><table class="mini-table">` +
         "<thead><tr><th>Name</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +
@@ -688,6 +690,18 @@ function wireFlowResetButtons(ip, id) {
     });
     document.querySelectorAll("#streamsBody-" + id + " .channelResetBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); resetChannel(ip, id, parseInt(btn.dataset.channel, 10), btn.dataset.mode); };
+    });
+    document.querySelectorAll("#streamsBody-" + id + " tr.chHead").forEach(head => {
+        head.onclick = (ev) => {
+            ev.stopPropagation();
+            if (ev.target.closest("button")) return;
+            const key = ip + "|" + head.dataset.ch;
+            const open = !streamGroupOpen[key];
+            streamGroupOpen[key] = open;
+            head.querySelector(".chArrow").textContent = open ? "\u25BE" : "\u25B8";
+            head.title = "Click to " + (open ? "collapse" : "expand") + " CH" + String(head.dataset.ch).padStart(2, "0");
+            document.querySelectorAll("#streamsBody-" + id + ' tr.chRow[data-ch="' + head.dataset.ch + '"]').forEach(r => r.classList.toggle("hidden", !open));
+        };
     });
 }
 

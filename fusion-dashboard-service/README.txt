@@ -127,7 +127,11 @@ channel's streams under it, both legs (primary / secondary) each. Streams
 are named by channel and essence: CH01 - V01 (video), CH01 - A01..A04
 (audio), CH01 - D01 (data / ancillary) - the n-th engine of that essence in
 the order the device lists them. The short flow ID is shown too (hover for
-the full one).
+the full one). Each CH group is a toggle: click its header row to expand /
+collapse it (all collapsed by default; the header always shows the flow
+count and the channel's total sequence errors, in red when above 0, and its
+Clr / Reset buttons work while collapsed). Open/closed state is kept
+across the 4s auto-refresh.
 
 Flow resets (in the Stream rates table / header)
   Clr          per flow: clears just that flow's packet / sequence-error
