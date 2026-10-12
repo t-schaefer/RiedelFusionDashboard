@@ -35,7 +35,18 @@
     .col-filter-popup { position: absolute; top: 100%; left: 0; z-index: 20; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-weight: normal; text-align: left; min-width: 130px; max-height: 220px; overflow-y: auto; }
     .col-filter-popup label { display: block; white-space: nowrap; font-weight: normal; }
     tbody tr.datarow { cursor: pointer; }
-    tbody tr.datarow:hover { background: #f1f3f5; }
+    tbody tr.datarow:hover { background: #e7f1ff; }
+    .chev { display: inline-block; width: 1em; color: #0d6efd; font-size: 0.9em; transition: transform 0.12s; }
+    tr.datarow.open .chev { transform: rotate(90deg); }
+    tr.datarow.open { background: #f1f6ff; }
+    .groupbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding: 10px 12px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; }
+    .groupbar .label { font-weight: 600; margin-right: 4px; }
+    .chip { padding: 6px 14px; border: 1px solid #adb5bd; border-radius: 999px; background: #fff; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #212529; }
+    .chip:hover { border-color: #0d6efd; background: #e7f1ff; }
+    .chip.active { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+    .chip .n { font-weight: 400; opacity: 0.75; margin-left: 4px; }
+    .chip .off { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #dc3545; color: #fff; font-size: 0.72rem; }
+    .hint { color: #6c757d; font-size: 0.82rem; margin: 0 0 8px 2px; }
     tr.detail td { background: #f8f9fa; white-space: normal; }
     .hidden { display: none; }
     tr.hidden { display: none; }
@@ -58,7 +69,6 @@
     </header>
 
     <div class="toolbar">
-        <select id="groupSelect" title="Show only one device group (filters the table, the summary and the warnings list)"></select>
         <input type="text" id="filterInput" placeholder="Filter: IP, name or tag" style="width:220px">
         <label class="small"><input type="checkbox" id="onlyProblemsCheck"> show only problems</label>
         <button type="button" class="btn" id="syslogToggleBtn">Syslog (all devices)</button>
@@ -68,6 +78,9 @@
             <button type="submit" class="btn">+ Device</button>
         </form>
     </div>
+
+    <div class="groupbar" id="groupBar" title="Show only one device group (filters the table, the summary and the warnings list)"></div>
+    <p class="hint">&#9656; Click a device row to open its details (reboot, color bars, stream rates, resets).</p>
 
     <div id="syslogPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
         <div class="small muted" style="margin-bottom:8px;">
@@ -176,19 +189,26 @@ function loadGroupFilter() {
 function saveGroupFilter(value) {
     try { value ? localStorage.setItem("plsGroupFilter", value) : localStorage.removeItem("plsGroupFilter"); } catch (e) { /* storage unavailable */ }
 }
-let groupSelectSig = "";
-function renderGroupSelect(devices) {
-    const counts = {};
-    devices.forEach(d => { const g = deviceGroup(d); counts[g] = (counts[g] || 0) + 1; });
-    const groups = GROUP_ORDER.filter(g => counts[g]).concat(counts.Other ? ["Other"] : []);
-    if (groupFilter && !counts[groupFilter]) { groupFilter = null; saveGroupFilter(null); }
-    const sig = groups.map(g => g + counts[g]).join("|") + "#" + devices.length + "#" + groupFilter;
-    if (sig === groupSelectSig) return;     // don't rebuild an open dropdown every 4s
-    groupSelectSig = sig;
-    const sel = document.getElementById("groupSelect");
-    sel.innerHTML = `<option value="">All groups (${devices.length})</option>` +
-        groups.map(g => `<option value="${g}">${g} (${counts[g]})</option>`).join("");
-    sel.value = groupFilter || "";
+let groupBarSig = "";
+function renderGroupBar(devices) {
+    const stats = {};
+    devices.forEach(d => {
+        const g = deviceGroup(d);
+        const st = stats[g] || (stats[g] = { n: 0, off: 0 });
+        st.n++;
+        if (d.status === "offline") st.off++;
+    });
+    const groups = GROUP_ORDER.filter(g => stats[g]).concat(stats.Other ? ["Other"] : []);
+    if (groupFilter && !stats[groupFilter]) { groupFilter = null; saveGroupFilter(null); }
+    const sig = groups.map(g => g + stats[g].n + "/" + stats[g].off).join("|") + "#" + devices.length + "#" + groupFilter;
+    if (sig === groupBarSig) return;
+    groupBarSig = sig;
+    const chip = (value, label, n, off) =>
+        `<button type="button" class="chip${(groupFilter || "") === value ? " active" : ""}" data-group="${value}">${label}<span class="n">${n}</span>` +
+        (off ? `<span class="off" title="${off} offline">${off} off</span>` : "") + `</button>`;
+    document.getElementById("groupBar").innerHTML = `<span class="label">Group:</span>` +
+        chip("", "All", devices.length, devices.filter(d => d.status === "offline").length) +
+        groups.map(g => chip(g, g, stats[g].n, stats[g].off)).join("");
 }
 function summarize(devices) {
     const sum = { online: 0, warning: 0, offline: 0, unknown: 0, total: devices.length, info: 0 };
@@ -429,6 +449,8 @@ function setStatusFilter(status) {
 function toggleDetail(ip) {
     const detail = document.getElementById("detail-" + cssId(ip));
     if (detail) detail.classList.toggle("hidden");
+    const row = document.getElementById("row-" + cssId(ip));
+    if (row && detail) row.classList.toggle("open", !detail.classList.contains("hidden"));
 }
 
 function cssId(ip) { return ip.replace(/\./g, "-"); }
@@ -499,7 +521,7 @@ function renderRow(dev) {
 
     row.onclick = (ev) => { if (ev.target.closest("button") || ev.target.closest("input")) return; toggleDetail(dev.ip); };
     row.innerHTML = `
-      <td>${statusDot(dev.status)}</td>
+      <td style="white-space:nowrap"><span class="chev">&#9656;</span> ${statusDot(dev.status)}</td>
       <td style="font-family:monospace">${dev.ip}</td>
       <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
       <td title="${(cfg.information && cfg.information.type) || ""}">${deviceType(dev)}</td>
@@ -582,6 +604,7 @@ function renderRow(dev) {
     const match = deviceMatchesFilter(dev);
     row.classList.toggle("hidden", !match);
     if (!match) detail.classList.add("hidden");
+    row.classList.toggle("open", !detail.classList.contains("hidden"));
 }
 
 function pruneRemovedRows(devices) {
@@ -661,7 +684,7 @@ async function refresh() {
         const res = await fetch("/api/state", { cache: "no-store" });
         const data = await res.json();
         lastData = data;
-        renderGroupSelect(data.devices);
+        renderGroupBar(data.devices);
         sortedDevices().forEach(renderRow);
         pruneRemovedRows(data.devices);
         renderSummary(data.summary);
@@ -963,12 +986,14 @@ async function setColorBar(ip, sdiOutputId, value, checkboxEl) {
 }
 
 groupFilter = loadGroupFilter();
-document.getElementById("groupSelect").addEventListener("change", (ev) => {
-    groupFilter = ev.target.value || null;
+document.getElementById("groupBar").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-group]");
+    if (!btn) return;
+    groupFilter = btn.dataset.group || null;
     saveGroupFilter(groupFilter);
-    groupSelectSig = "";
+    groupBarSig = "";
     if (!lastData) return;
-    renderGroupSelect(lastData.devices);
+    renderGroupBar(lastData.devices);
     applyDisplay();
     renderSummary(lastData.summary);
     renderWarningsPanel(lastData.devices);

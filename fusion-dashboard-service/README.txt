@@ -175,13 +175,17 @@ answered (service.log) so the request body can be adjusted.
 
 Dashboard controls
 -------------------
-Group dropdown (toolbar, left of the text filter) - show one device group:
+Group buttons (bar above the table, "Group: All / GFX / ...") - show one device group:
     GFX, ST1, CS Rooms, REPLAY, ASX, DCR/DCB, GR, MC, OC, PCR, SCR
     (plus "Other" if a device name matches none). The group comes from the
     device name (CS1..CS29 = CS Rooms, DCR + DCB = DCR/DCB, OC.IP/HI +
     OC.IP/S = OC, ...; see GROUP_RULES in dashboard.html). It filters the
     table, the summary badges and the warnings list, and is remembered in
-    this browser. Combines with the text filter / column filters.
+    this browser. Each button shows the group's device count and, in red,
+    how many are offline. Combines with the text filter / column filters.
+
+Device rows - click a row (blue arrow on the left, row highlights on hover)
+    to open its details: ports, color bars, stream rates, resets, reboot.
 Pause polling (global) - top-right button. Stops the background health/config
     sweeps for the whole fleet until you resume it (state persists in the
     running service, not per-browser). Use this if you need to quiet things
