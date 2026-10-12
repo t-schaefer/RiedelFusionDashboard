@@ -58,6 +58,7 @@
     </header>
 
     <div class="toolbar">
+        <select id="groupSelect" title="Show only one device group (filters the table, the summary and the warnings list)"></select>
         <input type="text" id="filterInput" placeholder="Filter: IP, name or tag" style="width:220px">
         <label class="small"><input type="checkbox" id="onlyProblemsCheck"> show only problems</label>
         <button type="button" class="btn" id="syslogToggleBtn">Syslog (all devices)</button>
@@ -149,10 +150,55 @@ const REFRESH_MS = 4000;
 let filterText = "";
 let onlyProblems = false;
 let statusFilter = null;
+let groupFilter = null;
 let lastData = { devices: [] };
 let sortKey = "ip";
 let sortDir = "asc";
 let columnFilters = {}; // key -> Set of allowed values; absent = no restriction
+// Device groups for the toolbar dropdown, derived from the device name (the
+// name is all that MuoN cards have; Fusions follow the same naming). Order =
+// dropdown order. OC covers OC.IP/HI, OC.IP/S and OC VirtU; DCR and DCB are
+// one group. Names that match nothing land in "Other" (only listed if used).
+const GROUP_RULES = [
+    [/^GFX/i, "GFX"], [/^ST\d*\b/i, "ST1"], [/^CS\d+\b/i, "CS Rooms"], [/^REPLAY/i, "REPLAY"],
+    [/^ASX/i, "ASX"], [/^DC[RB]\b/i, "DCR/DCB"], [/^GR\d*\b/i, "GR"], [/^MC\d*\b/i, "MC"],
+    [/^OC\b/i, "OC"], [/^PCR/i, "PCR"], [/^SCR/i, "SCR"]
+];
+const GROUP_ORDER = GROUP_RULES.map(r => r[1]).filter((g, i, a) => a.indexOf(g) === i);
+function deviceGroup(dev) {
+    const name = String(dev.name || (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "").trim();
+    for (const [re, group] of GROUP_RULES) if (re.test(name)) return group;
+    return "Other";
+}
+function loadGroupFilter() {
+    try { return localStorage.getItem("plsGroupFilter") || null; } catch (e) { return null; }
+}
+function saveGroupFilter(value) {
+    try { value ? localStorage.setItem("plsGroupFilter", value) : localStorage.removeItem("plsGroupFilter"); } catch (e) { /* storage unavailable */ }
+}
+let groupSelectSig = "";
+function renderGroupSelect(devices) {
+    const counts = {};
+    devices.forEach(d => { const g = deviceGroup(d); counts[g] = (counts[g] || 0) + 1; });
+    const groups = GROUP_ORDER.filter(g => counts[g]).concat(counts.Other ? ["Other"] : []);
+    if (groupFilter && !counts[groupFilter]) { groupFilter = null; saveGroupFilter(null); }
+    const sig = groups.map(g => g + counts[g]).join("|") + "#" + devices.length + "#" + groupFilter;
+    if (sig === groupSelectSig) return;     // don't rebuild an open dropdown every 4s
+    groupSelectSig = sig;
+    const sel = document.getElementById("groupSelect");
+    sel.innerHTML = `<option value="">All groups (${devices.length})</option>` +
+        groups.map(g => `<option value="${g}">${g} (${counts[g]})</option>`).join("");
+    sel.value = groupFilter || "";
+}
+function summarize(devices) {
+    const sum = { online: 0, warning: 0, offline: 0, unknown: 0, total: devices.length, info: 0 };
+    devices.forEach(d => {
+        sum[d.status] = (sum[d.status] || 0) + 1;
+        if (d.status !== "offline" && (d.health && d.health.warnings || []).some(w => w.severity === "info")) sum.info++;
+    });
+    return sum;
+}
+
 const FILTERABLE_COLUMNS = ["type", "fw", "ptp", "red", "blue", "warn", "nmos", "syslog"];
 
 // Device family from self/information.base_type ("FusioN6", "MuoN B", ...).
@@ -351,6 +397,7 @@ function portsTable(ports) {
 }
 
 function deviceMatchesFilter(dev) {
+    if (groupFilter && deviceGroup(dev) !== groupFilter) return false;
     if (onlyProblems) {
         const redDown = columnValue(dev, "red") !== "up";
         const blueDown = columnValue(dev, "blue") !== "up";
@@ -550,6 +597,7 @@ function pruneRemovedRows(devices) {
 }
 
 function renderSummary(summary) {
+    if (groupFilter && lastData) summary = summarize(lastData.devices.filter(d => deviceGroup(d) === groupFilter));
     const ring = (status) => statusFilter === status ? "outline:2px solid #212529; outline-offset:1px;" : "";
     document.getElementById("summaryBar").innerHTML =
         `<span class="badge success" id="onlineSummaryBadge" style="cursor:pointer; ${ring("online")}" title="Click to show only online devices">${summary.online || 0} online</span> ` +
@@ -557,7 +605,7 @@ function renderSummary(summary) {
         (summary.info ? `<span class="badge secondary" id="infoSummaryBadge" style="cursor:pointer" title="Devices with info-level notes (not counted as warnings) - click to list">${summary.info} info</span> ` : "") +
         `<span class="badge danger" id="offlineSummaryBadge" style="cursor:pointer; ${ring("offline")}" title="Click to show only offline devices">${summary.offline || 0} offline</span> ` +
         (summary.unknown ? `<span class="badge secondary">${summary.unknown} unknown</span> ` : "") +
-        `<span class="muted small">${summary.total || 0} devices total</span>` +
+        `<span class="muted small">${summary.total || 0} devices ${groupFilter ? "in " + groupFilter : "total"}</span>` +
         (statusFilter ? ` <button class="btn" id="clearStatusFilterBtn" style="margin-left:6px;">&times; clear filter</button>` : "");
     document.getElementById("warningSummaryBadge").onclick = toggleWarningsPanel;
     const infoBadge = document.getElementById("infoSummaryBadge");
@@ -570,6 +618,7 @@ function renderSummary(summary) {
 
 function renderWarningsPanel(devices) {
     const withWarnings = devices
+        .filter(d => !groupFilter || deviceGroup(d) === groupFilter)
         .filter(d => d.status !== "offline" && d.health && d.health.warnings && d.health.warnings.length)
         .sort((a, b) => (splitWarnings(b.health.warnings).real.length > 0) - (splitWarnings(a.health.warnings).real.length > 0));
     const body = document.getElementById("warningsPanelBody");
@@ -612,6 +661,7 @@ async function refresh() {
         const res = await fetch("/api/state", { cache: "no-store" });
         const data = await res.json();
         lastData = data;
+        renderGroupSelect(data.devices);
         sortedDevices().forEach(renderRow);
         pruneRemovedRows(data.devices);
         renderSummary(data.summary);
@@ -912,6 +962,17 @@ async function setColorBar(ip, sdiOutputId, value, checkboxEl) {
     }
 }
 
+groupFilter = loadGroupFilter();
+document.getElementById("groupSelect").addEventListener("change", (ev) => {
+    groupFilter = ev.target.value || null;
+    saveGroupFilter(groupFilter);
+    groupSelectSig = "";
+    if (!lastData) return;
+    renderGroupSelect(lastData.devices);
+    applyDisplay();
+    renderSummary(lastData.summary);
+    renderWarningsPanel(lastData.devices);
+});
 document.getElementById("filterInput").addEventListener("input", (ev) => {
     filterText = ev.target.value.trim().toLowerCase();
     applyDisplay();

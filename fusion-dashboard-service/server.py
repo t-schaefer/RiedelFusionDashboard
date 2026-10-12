@@ -39,6 +39,7 @@ from urllib.parse import urlparse, parse_qs
 BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
 DEVICES_EXAMPLE_FILE = BASE_DIR / "devices.example.json"
+SEEDED_FILE = BASE_DIR / "devices.seeded.json"
 DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 LOG_FILE = BASE_DIR / "service.log"
 
@@ -78,7 +79,36 @@ def load_devices():
         DEVICES_FILE.write_text(DEVICES_EXAMPLE_FILE.read_text(encoding="utf-8"), encoding="utf-8")
         logger.info("devices.json not found - seeded it from devices.example.json")
     with open(DEVICES_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        devices = json.load(f)
+    return merge_new_seed_devices(devices)
+
+
+def merge_new_seed_devices(devices):
+    """Append devices that were newly added to devices.example.json by an update.
+
+    devices.json is local and never touched by git, so devices added to the
+    tracked example later (e.g. a new batch of cards) would otherwise never
+    show up on an existing install. SEEDED_FILE remembers which example IPs
+    were already offered, so a device deleted from devices.json by hand is not
+    resurrected on every restart - only IPs the example gained since last time
+    are added.
+    """
+    if not DEVICES_EXAMPLE_FILE.exists():
+        return devices
+    try:
+        seed = json.loads(DEVICES_EXAMPLE_FILE.read_text(encoding="utf-8"))
+        offered = set(json.loads(SEEDED_FILE.read_text(encoding="utf-8"))) if SEEDED_FILE.exists() else set()
+    except (OSError, ValueError):
+        return devices
+    known = {d["ip"] for d in devices}
+    added = [d for d in seed if d["ip"] not in offered and d["ip"] not in known]
+    if added:
+        devices = devices + [{"ip": d["ip"], "name": d.get("name", ""), "tag": d.get("tag", "")} for d in added]
+        save_devices(devices)
+        logger.info("added %d new device(s) from devices.example.json", len(added))
+    if {d["ip"] for d in seed} - offered:
+        SEEDED_FILE.write_text(json.dumps(sorted(d["ip"] for d in seed)), encoding="utf-8")
+    return devices
 
 
 def save_devices(devices):

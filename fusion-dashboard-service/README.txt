@@ -19,9 +19,8 @@ devices.json                  the LIVE device list (ip, name, tag) - not tracked
                               run from devices.example.json if it doesn't exist yet.
 devices.example.json          the tracked starting-point device list - only used to seed a
                               fresh devices.json on first run
-merge_devices.py              adds devices that are new in devices.example.json to the live
-                              devices.json (never changes or removes existing ones) - see
-                              "Adding devices after an update" below
+devices.seeded.json         (auto-created, not in git) remembers which devices.example.json
+                              entries were already offered to devices.json - see "New devices"
 install-task-windows.ps1      one-time setup: registers the Windows Scheduled Task
 uninstall-task-windows.ps1    removes the scheduled task and firewall rule again
 ../update-windows.ps1         (repo root) pulls the latest version from git and restarts the
@@ -84,15 +83,18 @@ devices.json alone, then start the task again:
     ... copy the new files over ...
     Start-ScheduledTask -TaskName PLSFusionDashboardService
 
-Adding devices after an update
--------------------------------
-devices.example.json only seeds a NEW devices.json, so devices added to the
-repo later (e.g. the OC.IP/S MuoN cards) don't appear on an existing install
-by themselves. After the update, stop the task, merge, start it again:
-    Stop-ScheduledTask  -TaskName PLSFusionDashboardService
-    python merge_devices.py
-    Start-ScheduledTask -TaskName PLSFusionDashboardService
-It only appends IPs missing from devices.json and prints what it added.
+New devices (from an update)
+----------------------------
+devices.json is local, but when an update adds devices to devices.example.json
+(e.g. the OC.IP/S MuoN cards), the service appends them to devices.json by
+itself on its next start - nothing to do besides the normal update. It only
+adds IPs the example gained since the last start, so a device you deleted
+from devices.json by hand stays deleted. (The first start after upgrading to
+this version offers every example device that's missing from devices.json
+once, then remembers it in devices.seeded.json.)
+
+Device Type column: read from the device itself. Devices that were never
+reachable since the service started (offline) show "-" until they answer once.
 
 Changing settings
 ------------------
@@ -173,6 +175,13 @@ answered (service.log) so the request body can be adjusted.
 
 Dashboard controls
 -------------------
+Group dropdown (toolbar, left of the text filter) - show one device group:
+    GFX, ST1, CS Rooms, REPLAY, ASX, DCR/DCB, GR, MC, OC, PCR, SCR
+    (plus "Other" if a device name matches none). The group comes from the
+    device name (CS1..CS29 = CS Rooms, DCR + DCB = DCR/DCB, OC.IP/HI +
+    OC.IP/S = OC, ...; see GROUP_RULES in dashboard.html). It filters the
+    table, the summary badges and the warnings list, and is remembered in
+    this browser. Combines with the text filter / column filters.
 Pause polling (global) - top-right button. Stops the background health/config
     sweeps for the whole fleet until you resume it (state persists in the
     running service, not per-browser). Use this if you need to quiet things
