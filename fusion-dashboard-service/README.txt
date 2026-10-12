@@ -121,10 +121,13 @@ that output in place of the live picture, so it asks for confirmation
 first - only do this if you know that output isn't on air.
 
 Stream rates: live packet rate / sequence-error count per flow
-(/telemetry/devices), one row per channel/essence/leg. Each row is named
-like "Ch01 - Video 01" / "Ch01 - Audio 03": channel, essence, and the n-th
-engine of that essence on the channel in the order the device lists them.
-The short flow ID is shown too (hover for the full one).
+(/telemetry/devices), grouped by logical channel: a "CH01 RX" header row
+(RX = decapsulator/receiver, TX = encapsulator/sender) with all of that
+channel's streams under it, both legs (primary / secondary) each. Streams
+are named by channel and essence: CH01 - V01 (video), CH01 - A01..A04
+(audio), CH01 - D01 (data / ancillary) - the n-th engine of that essence in
+the order the device lists them. The short flow ID is shown too (hover for
+the full one).
 
 Flow resets (in the Stream rates table / header)
   Clr          per flow: clears just that flow's packet / sequence-error
@@ -133,6 +136,12 @@ Flow resets (in the Stream rates table / header)
   Reset        per flow: resets the flow itself (same endpoint, "reset"
                flag). Can glitch that one stream while it re-locks - asks
                for a stronger confirmation.
+  Clr CHxx / Reset CHxx (channel header row): the same, for EVERY flow of
+               that channel at once - all its streams, primary + secondary.
+               Done in one request by the service, which reads the
+               channel's flows fresh from the device; the confirmation
+               shows how many flows were accepted and the channel's total
+               sequence errors before -> after.
   Reset all counters (button next to Load/Refresh): clears the counters
                of every flow on that Fusion at once (/self/system
                counters_reset), for when you don't want to go flow by flow.

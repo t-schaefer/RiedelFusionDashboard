@@ -247,12 +247,20 @@ def set_color_bar(ip, sdi_output_id, value):
     return status, body, used_net
 
 
+# Short essence letters used in stream names: V01, A01..A04, D01 (D = data /
+# ancillary).
+ESSENCE_LETTER = {"video": "V", "audio": "A", "ancillary": "D"}
+
+
 def get_stream_rates(ip):
     """
     On-demand only: live per-flow packet rate/count/sequence-error telemetry
     for every channel on this device (/telemetry/devices), flattened into a
     simple list for the UI instead of the deeply nested shape the device
-    returns it in.
+    returns it in. Each row is named like "CH01 - V01" / "CH01 - A03": the
+    channel, the essence letter, and the n-th engine of that essence on the
+    channel in the order the device lists them (pri and sec legs of the same
+    engine share the name).
     """
     data, used_ip, used_net = call_with_failover(
         ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/telemetry/devices", REQUEST_TIMEOUT_SEC)
@@ -260,17 +268,17 @@ def get_stream_rates(ip):
     rows = []
     for chan in (data or {}).get("devices", []):
         ch = chan.get("channel")
-        ch_label = "Ch%02d" % ch if isinstance(ch, int) else "Ch--"
+        ch_label = "CH%02d" % ch if isinstance(ch, int) else "CH--"
         seen = {}  # essence -> how many engines of it already named on this channel
         for engine in chan.get("engines", []):
             essence = engine.get("essence") or "stream"
             seen[essence] = seen.get(essence, 0) + 1
-            # e.g. "Ch01 - Video 01", "Ch01 - Audio 03": the n-th engine of
-            # that essence on the channel, in the order the device lists them.
-            name = "%s - %s %02d" % (ch_label, essence.capitalize(), seen[essence])
+            letter = ESSENCE_LETTER.get(essence) or (essence[:1].upper() or "?")
+            name = "%s - %s%02d" % (ch_label, letter, seen[essence])
             for flow in engine.get("flows", []):
                 rows.append({
                     "channel": ch,
+                    "chType": chan.get("type"),
                     "name": name,
                     "essence": engine.get("essence"),
                     "leg": flow.get("type"),
@@ -300,10 +308,21 @@ def _flow_counters(diag):
     return legs
 
 
-def reset_flow(ip, flow_id, mode):
+def _sum_counter(legs_per_flow, key):
+    total = 0
+    for legs in legs_per_flow:
+        for leg in legs:
+            try:
+                total += int(leg.get(key) or 0)
+            except (TypeError, ValueError):
+                pass
+    return total
+
+
+def reset_flows(ip, flow_ids, mode):
     """
-    Per-flow reset via /self/diag/flow/{flow_id}, whose GET exposes
-    config: {commit, reset, reset_counter}:
+    Resets one or several flows via /self/diag/flow/{flow_id}, whose GET
+    exposes config: {commit, reset, reset_counter}:
       mode "counters" -> reset_counter: clears that flow's packet /
                          sequence-error counters only (non-disruptive).
       mode "flow"     -> reset: resets the flow itself (may glitch that
@@ -311,9 +330,14 @@ def reset_flow(ip, flow_id, mode):
     The POST body ({"config": {<flag>: "1", "commit": "1"}}) is inferred
     from the field names - the existing tools never wrote these - so it has
     NOT been confirmed on a live unit. To make that visible instead of
-    silent, this reads the flow's counters before and after and returns
+    silent, this reads every flow's counters before and after and returns
     both, plus the config flags as the device reports them afterwards (a flag
     left at "1" means the device didn't treat it as a momentary trigger).
+    Whether Red or Blue answers is worked out once (first read) and reused
+    for the rest, instead of paying a Red timeout per flow.
+    Returns {"network": ..., "flows": [{flow, ok, httpStatus|error, before,
+    after, configAfter}, ...]} in the order given. Raises only if the device
+    can't be reached at all.
     """
     if mode == "counters":
         flag = "reset_counter"
@@ -321,23 +345,96 @@ def reset_flow(ip, flow_id, mode):
         flag = "reset"
     else:
         raise ValueError("mode must be 'counters' or 'flow'")
-    path = "/emsfp/node/v1/self/diag/flow/" + flow_id
-    before, used_ip, used_net = call_with_failover(
-        ip, lambda addr: http_get_json(addr, path, REQUEST_TIMEOUT_SEC)
+    if not flow_ids:
+        raise ValueError("no flows given")
+
+    def path_of(fid):
+        return "/emsfp/node/v1/self/diag/flow/" + fid
+
+    def safe_get(addr, fid):
+        try:
+            return http_get_json(addr, path_of(fid), REQUEST_TIMEOUT_SEC)
+        except Exception:
+            return None
+
+    first, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, path_of(flow_ids[0]), REQUEST_TIMEOUT_SEC)
     )
-    status, body = http_post(used_ip, path, {"config": {flag: "1", "commit": "1"}}, REQUEST_TIMEOUT_SEC)
+    before = {flow_ids[0]: first}
+    for fid in flow_ids[1:]:
+        before[fid] = safe_get(used_ip, fid)
+
+    results = {}
+    for fid in flow_ids:
+        try:
+            status, body = http_post(used_ip, path_of(fid), {"config": {flag: "1", "commit": "1"}}, REQUEST_TIMEOUT_SEC)
+            results[fid] = {"ok": True, "httpStatus": status, "body": body[:300]}
+        except Exception as e:
+            results[fid] = {"ok": False, "error": str(e)}
+
     time.sleep(0.5)
-    try:
-        after = http_get_json(used_ip, path, REQUEST_TIMEOUT_SEC)
-    except Exception:
-        after = None
+    out = []
+    for fid in flow_ids:
+        after = safe_get(used_ip, fid)
+        entry = dict(results[fid])
+        entry.update({
+            "flow": fid,
+            "before": _flow_counters(before[fid]),
+            "after": _flow_counters(after),
+            "configAfter": (after or {}).get("config"),
+        })
+        out.append(entry)
+    return {"network": used_net, "flows": out}
+
+
+def reset_flow(ip, flow_id, mode):
+    """Single-flow convenience wrapper around reset_flows()."""
+    res = reset_flows(ip, [flow_id], mode)
+    f = res["flows"][0]
+    if not f["ok"]:
+        raise RuntimeError(f["error"])
     return {
-        "httpStatus": status,
-        "body": body[:300],
-        "network": used_net,
-        "before": _flow_counters(before),
-        "after": _flow_counters(after),
-        "configAfter": (after or {}).get("config"),
+        "httpStatus": f["httpStatus"],
+        "body": f["body"],
+        "network": res["network"],
+        "before": f["before"],
+        "after": f["after"],
+        "configAfter": f["configAfter"],
+    }
+
+
+def reset_channel(ip, channel, mode):
+    """
+    Resets every flow of one logical channel on a Fusion together - all
+    engines (V01, A01..A04, D01) and both legs (pri / sec) - by looking the
+    channel's flows up fresh from /telemetry/devices rather than trusting a
+    list from the browser, then handing them to reset_flows(). Returns the
+    per-flow results plus summed sequence-error / packet counters before and
+    after, so the UI can show one summary line.
+    """
+    rows, _ = get_stream_rates(ip)
+    flow_ids = []
+    for r in rows:
+        fid = r.get("flow")
+        if r.get("channel") == channel and is_valid_id(fid) and fid not in flow_ids:
+            flow_ids.append(fid)
+    if not flow_ids:
+        raise LookupError("no flows found for channel %s on %s" % (channel, ip))
+    res = reset_flows(ip, flow_ids, mode)
+    flows = res["flows"]
+    return {
+        "network": res["network"],
+        "total": len(flows),
+        "succeeded": sum(1 for f in flows if f["ok"]),
+        "failed": [{"flow": f["flow"], "error": f.get("error")} for f in flows if not f["ok"]],
+        "seqErrBefore": _sum_counter([f["before"] for f in flows], "sequence_error"),
+        "seqErrAfter": _sum_counter([f["after"] for f in flows], "sequence_error"),
+        "pktBefore": _sum_counter([f["before"] for f in flows], "pkt_cnt"),
+        "pktAfter": _sum_counter([f["after"] for f in flows], "pkt_cnt"),
+        "stuckFlags": sorted({
+            k for f in flows for k, v in (f.get("configAfter") or {}).items()
+            if k != "commit" and str(v) == "1"
+        }),
     }
 
 
@@ -629,6 +726,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(dict(result, ok=True))
             except Exception as e:
                 logger.error("flow reset failed for %s / %s: %s", ip, flow_id, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/channel-reset":
+            ip = (data.get("ip") or "").strip()
+            channel = data.get("channel")
+            mode = (data.get("mode") or "").strip()
+            if not ip or ip not in STATE or not isinstance(channel, int) or isinstance(channel, bool) or mode not in ("counters", "flow"):
+                self._send_json({"ok": False, "error": "valid ip, integer channel and mode ('counters' or 'flow') are required"}, 400)
+                return
+            logger.warning("channel reset (%s) requested for %s / CH%02d via API", mode, ip, channel)
+            try:
+                result = reset_channel(ip, channel, mode)
+                logger.warning("channel reset (%s) for %s / CH%02d: %s", mode, ip, channel, result)
+                self._send_json(dict(result, ok=True))
+            except LookupError as e:
+                self._send_json({"ok": False, "error": str(e)}, 404)
+            except Exception as e:
+                logger.error("channel reset failed for %s / CH%02d: %s", ip, channel, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/counters-reset":
             ip = (data.get("ip") or "").strip()

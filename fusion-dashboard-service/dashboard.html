@@ -44,6 +44,7 @@
     .alert { background: #f8d7da; color: #842029; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 8px; }
     .mini-table { border-collapse: collapse; font-size: 0.78rem; }
     .mini-table td, .mini-table th { padding: 2px 6px; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
+    .mini-table tr.chHead td { background: #eef1f4; font-weight: 600; padding-top: 5px; padding-bottom: 5px; }
     .footnote { color: #6c757d; font-size: 0.8rem; margin-top: 8px; }
 </style>
 </head>
@@ -642,14 +643,36 @@ function streamsSectionHtml(ip) {
     const cached = streamCache[ip];
     if (!cached) return '<span class="muted small">not loaded</span>';
     if (!cached.streams || !cached.streams.length) return '<span class="muted small">no active streams found</span>';
-    const resetCell = (s) => s.flow
+
+    // One group per logical channel (CH01 ...), holding all its streams
+    // (V01, A01..A04, D01) with both legs (pri / sec), so a whole channel
+    // can be cleared / reset together from its header row.
+    const groups = new Map();
+    cached.streams.forEach(s => {
+        const key = s.channel ?? "?";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(s);
+    });
+    const dirLabel = { decapsulator: "RX", encapsulator: "TX" };
+    const flowBtns = (s) => s.flow
         ? `<button class="btn flowResetBtn" data-flow="${s.flow}" data-mode="counters" title="Clear this flow's packet / sequence-error counters (stream itself untouched)">Clr</button> ` +
           `<button class="btn danger flowResetBtn" data-flow="${s.flow}" data-mode="flow" title="Reset the flow itself - may glitch that stream while it re-locks">Reset</button>`
         : "";
-    return `<div style="max-height:220px; overflow-y:auto;"><table class="mini-table">` +
-        "<thead><tr><th>Ch</th><th>Name</th><th>Essence</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +
-        cached.streams.map(s => `<tr><td>${s.channel ?? "-"}</td><td>${s.name || "-"}</td><td>${s.essence || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${resetCell(s)}</td></tr>`).join("") +
-        "</tbody></table></div>" +
+    let body = "";
+    groups.forEach((rows, channel) => {
+        const label = typeof channel === "number" ? "CH" + String(channel).padStart(2, "0") : "CH" + channel;
+        const seqErr = rows.reduce((n, s) => n + (parseInt(s.sequence_error, 10) || 0), 0);
+        const dir = dirLabel[rows[0].chType] || rows[0].chType || "";
+        const chBtns = typeof channel === "number"
+            ? `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
+              `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
+            : "";
+        body += `<tr class="chHead"><td colspan="5">${label}${dir ? ` <span class="muted">${dir}</span>` : ""} <span class="muted">- ${rows.length} flows, ${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
+        body += rows.map(s => `<tr><td>${s.name || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
+    });
+    return `<div style="max-height:320px; overflow-y:auto;"><table class="mini-table">` +
+        "<thead><tr><th>Name</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +
+        body + "</tbody></table></div>" +
         `<div class="muted small" style="margin-top:4px">via ${cached.network || "?"}</div>`;
 }
 
@@ -663,6 +686,36 @@ function wireFlowResetButtons(ip, id) {
     document.querySelectorAll("#streamsBody-" + id + " .flowResetBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); resetFlow(ip, id, btn.dataset.flow, btn.dataset.mode); };
     });
+    document.querySelectorAll("#streamsBody-" + id + " .channelResetBtn").forEach(btn => {
+        btn.onclick = (ev) => { ev.stopPropagation(); resetChannel(ip, id, parseInt(btn.dataset.channel, 10), btn.dataset.mode); };
+    });
+}
+
+async function resetChannel(ip, id, channel, mode) {
+    const label = "CH" + String(channel).padStart(2, "0");
+    const caveat = "\n\nThis request is inferred from the device's field names and has not been confirmed on a live unit - the sequence-error totals before/after are shown afterwards so you can see whether it worked.";
+    const msg = mode === "flow"
+        ? "Reset ALL flows of " + label + " on " + ip + "?\n\nEvery stream of this channel (video, audio, data - primary and secondary) is reset, not just its counters. The whole channel may glitch or drop out briefly while it re-locks. Only do this if you know it's safe right now." + caveat
+        : "Clear the counters of ALL flows of " + label + " on " + ip + "?\n\nEvery stream of this channel (video, audio, data - primary and secondary) gets its packet / sequence-error counters cleared; the streams themselves aren't touched." + caveat;
+    if (!confirm(msg)) return;
+    try {
+        const res = await fetch("/api/devices/channel-reset", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, channel, mode })
+        });
+        const data = await res.json();
+        if (!data.ok) { alert("Failed: " + (data.error || "unknown error")); return; }
+        alert(
+            (mode === "flow" ? "Channel reset" : "Counter reset") + " sent for " + label + " on " + ip + " (via " + (data.network || "?") + "): " +
+            data.succeeded + "/" + data.total + " flows accepted.\n\n" +
+            "Sequence errors, all flows of the channel: " + data.seqErrBefore + " -> " + data.seqErrAfter +
+            (data.failed && data.failed.length ? "\n\nFailed: " + data.failed.map(f => String(f.flow).slice(0, 8) + " (" + f.error + ")").join(", ") : "") +
+            (data.stuckFlags && data.stuckFlags.length ? "\n\nNote: the device still reports " + data.stuckFlags.join(", ") + " = 1 afterwards, so it may not have treated it as a one-shot trigger." : "")
+        );
+        await loadStreams(ip, id);
+    } catch (e) {
+        alert("Failed to send reset: " + e.message);
+    }
 }
 
 async function resetFlow(ip, id, flowId, mode) {
