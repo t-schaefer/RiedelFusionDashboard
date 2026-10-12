@@ -196,6 +196,9 @@ SDI bitrate (per device, expanded row, left of Color bars) - the global SDI
     {"operating_bit_rate": ...}}); "auto" is new in this tool but is the value
     about half of the fleet is already set to. Not on MuoN cards (no /sdi).
     The value is read with the 10-minute config refresh.
+    Also shown as the "SDI rate" column (sortable / filterable): the set value,
+    with the actually running one in brackets when it differs, e.g.
+    "auto (integer)". "-" = MuoN card or not read yet.
 
 Group buttons (bar above the table, "Group: All / GFX / ...") - show one device group:
     GFX, ST1, CS Rooms, REPLAY, ASX, DCR/DCB, GR, MC, OC, PCR, SCR

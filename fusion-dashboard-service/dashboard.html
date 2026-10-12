@@ -137,6 +137,7 @@
                     <th class="sortable" data-key="name">Name<span class="sort-arrow"></span></th>
                     <th class="sortable" data-key="type" title="Device family, from self/information (Fusion gateway or MuoN card)">Type<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="type" title="Filter">&#9662;</button></th>
                     <th class="sortable" data-key="fw">FW<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="fw" title="Filter">&#9662;</button></th>
+                    <th class="sortable" data-key="sdi" title="SDI operating bit rate (integer / fractional / auto); grey in brackets = what the device is actually running when it differs from the setting">SDI rate<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="sdi" title="Filter">&#9662;</button></th>
                     <th class="sortable" data-key="temp">Temp<span class="sort-arrow"></span></th>
                     <th class="sortable" data-key="ptp">PTP<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="ptp" title="Filter">&#9662;</button></th>
                     <th class="sortable" data-key="red" title="Red = primary comms interface">Red<span class="sort-arrow"></span><button type="button" class="filter-btn" data-key="red" title="Filter">&#9662;</button></th>
@@ -219,7 +220,7 @@ function summarize(devices) {
     return sum;
 }
 
-const FILTERABLE_COLUMNS = ["type", "fw", "ptp", "red", "blue", "warn", "nmos", "syslog"];
+const FILTERABLE_COLUMNS = ["type", "fw", "sdi", "ptp", "red", "blue", "warn", "nmos", "syslog"];
 
 // Device family from self/information.base_type ("FusioN6", "MuoN B", ...).
 // MuoN cards speak the same emsfp API as the Fusion gateways; they just
@@ -284,6 +285,7 @@ function columnValue(dev, key) {
         case "name": return ((cfg.ipconfig && cfg.ipconfig.hostname) || dev.name || "").toLowerCase();
         case "type": return deviceType(dev);
         case "fw": return fw ? fw.semantic_version : "-";
+        case "sdi": return (cfg.sdi && cfg.sdi.configuration && cfg.sdi.configuration.operating_bit_rate) || "-";
         case "temp": return isStale ? null : (hlt.core_temp ?? null);
         case "ptp": return isStale ? "-" : (refclk.status || "-");
         case "red": return isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-");
@@ -526,6 +528,13 @@ function renderRow(dev) {
       <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
       <td title="${(cfg.information && cfg.information.type) || ""}">${deviceType(dev)}</td>
       <td>${fw ? fw.semantic_version : "-"}</td>
+      <td${isStale ? ' style="color:#adb5bd"' : ""}>${(() => {
+        const sdi = cfg.sdi || {};
+        const set = sdi.configuration && sdi.configuration.operating_bit_rate;
+        if (!set) return "-";
+        const run = sdi.running_operating_bit_rate;
+        return set + (run && run !== set ? ` <span class="muted small" title="actually running">(${run})</span>` : "");
+      })()}</td>
       <td style="color:${isStale ? "#adb5bd" : tempColor};font-weight:600" title="${isStale ? staleTitle + (hlt.core_temp != null ? " (" + hlt.core_temp + "°C)" : "") : ""}">${isStale ? "-" : (hlt.core_temp ?? "-")}&deg;C</td>
       <td><span class="badge ${isStale ? "secondary" : (refclk.status === "locked" ? "success" : "danger")}" title="${isStale ? staleTitle : ""}">${isStale ? "-" : (refclk.status || "?")}</span></td>
       <td><span class="badge ${isStale ? "secondary" : (ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "red" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "red" ? "Currently communicating via Red" : "")}">${isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-")}</span></td>
@@ -548,7 +557,7 @@ function renderRow(dev) {
     };
 
     detail.innerHTML = `
-      <td colspan="14">
+      <td colspan="15">
         <div style="display:flex; justify-content:flex-end; margin-bottom:4px;">
           <button class="btn" id="closeDetail-${id}" title="Close">&times; Close</button>
         </div>
