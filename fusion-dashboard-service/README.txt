@@ -238,6 +238,16 @@ In the Temp column of the dashboard (dashboard.html, search "tempColor"):
     yellow  70C and above
     red     73C and above
 
+Many viewers at once
+---------------------
+Viewers never talk to the Fusion devices - they only read the service's cached
+state, so any number of open browser tabs costs the fleet nothing. Each open
+tab fetches /api/state every 4s (~1.2 MB of JSON). The service builds that
+once per second and shares it (gzip-compressed, ~50 KB) between all viewers,
+and accepts bursts of up to 128 pending connections. Tested here: 200
+simultaneous clients, no errors, ~30 ms median. Per-device actions (Load
+color bars / stream rates, resets, reboot) do hit the device, once per click.
+
 Why polling is safe for the fleet
 ----------------------------------
 - Health comes from a single lightweight endpoint per device

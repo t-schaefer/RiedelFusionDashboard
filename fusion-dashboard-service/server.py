@@ -22,6 +22,7 @@ Polling design (why it's built this way - matters at 100+ devices):
   much slower interval than health, since it rarely changes.
 """
 
+import gzip
 import json
 import logging
 import logging.handlers
@@ -650,8 +651,27 @@ def snapshot():
     }
 
 
+# /api/state is ~1 MB of JSON and every open browser tab asks for it every 4s.
+# Build it at most once per STATE_CACHE_SEC and share the (also gzipped) bytes
+# between all viewers, so the cost no longer grows with the number of viewers.
+STATE_CACHE_SEC = 1.0
+_state_cache = {"at": 0.0, "raw": b"", "gz": b""}
+_state_cache_lock = threading.Lock()
+
+
+def state_payload():
+    with _state_cache_lock:
+        now = time.monotonic()
+        if now - _state_cache["at"] > STATE_CACHE_SEC or not _state_cache["raw"]:
+            raw = json.dumps(snapshot()).encode("utf-8")
+            _state_cache.update(at=now, raw=raw, gz=gzip.compress(raw, 5))
+        return _state_cache["raw"], _state_cache["gz"]
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
+        if args and str(args[0]).startswith("GET /api/state"):
+            return      # polled every 4s by every open tab - would flood service.log
         logger.info("%s - %s", self.address_string(), fmt % args)
 
     def _send_json(self, obj, status=200):
@@ -676,7 +696,16 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/state":
-            self._send_json(snapshot())
+            raw, gz = state_payload()
+            use_gz = "gzip" in self.headers.get("Accept-Encoding", "")
+            body = gz if use_gz else raw
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            if use_gz:
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path.startswith("/api/devices/colorbars"):
             ip = (parse_qs(urlparse(self.path).query).get("ip") or [""])[0]
             if not ip or ip not in STATE:
@@ -883,6 +912,8 @@ def main():
     init_state()
     threading.Thread(target=config_refresh_loop, daemon=True).start()
     threading.Thread(target=health_poll_loop, daemon=True).start()
+    ThreadingHTTPServer.request_queue_size = 128   # default 5 drops connections when many browsers connect at once
+    ThreadingHTTPServer.daemon_threads = True
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     logger.info("PLS Fusion Dashboard service listening on http://%s:%d/", HOST, PORT)
     try:
