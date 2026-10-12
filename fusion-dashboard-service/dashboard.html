@@ -785,7 +785,8 @@ function streamsSectionHtml(ip) {
         const seqErr = rows.reduce((n, s) => n + (parseInt(s.sequence_error, 10) || 0), 0);
         const dir = dirLabel[rows[0].chType] || rows[0].chType || "";
         const chBtns = typeof channel === "number"
-            ? `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
+            ? `<button class="btn channelEnableBtn" data-channel="${channel}" title="Switch ON all flows of ${label} (every stream, pri + sec)">Enable ${label}</button> ` +
+              `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
               `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
             : "";
         const open = !!streamGroupOpen[ip + "|" + channel];
@@ -807,6 +808,9 @@ function fmtLegCounters(legs) {
 function wireFlowResetButtons(ip, id) {
     document.querySelectorAll("#streamsBody-" + id + " .flowResetBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); resetFlow(ip, id, btn.dataset.flow, btn.dataset.mode); };
+    });
+    document.querySelectorAll("#streamsBody-" + id + " .channelEnableBtn").forEach(btn => {
+        btn.onclick = (ev) => { ev.stopPropagation(); enableChannel(ip, id, parseInt(btn.dataset.channel, 10)); };
     });
     document.querySelectorAll("#streamsBody-" + id + " .channelResetBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); resetChannel(ip, id, parseInt(btn.dataset.channel, 10), btn.dataset.mode); };
@@ -849,6 +853,35 @@ async function resetChannel(ip, id, channel, mode) {
         await loadStreams(ip, id);
     } catch (e) {
         alert("Failed to send reset: " + e.message);
+    }
+}
+
+async function enableChannel(ip, id, channel) {
+    const label = "CH" + String(channel).padStart(2, "0");
+    if (!confirm(
+        "Enable ALL flows of " + label + " on " + ip + "?\n\n" +
+        "Every stream of this channel (video, audio, data - primary and secondary) is switched on. " +
+        "On a receiver this makes it join the multicast groups already entered on its flows; on a sender it starts sending. " +
+        "Flows that have no destination address yet (not routed) stay off - they are listed afterwards.\n\n" +
+        "Already-enabled flows are left alone."
+    )) return;
+    try {
+        const res = await fetch("/api/devices/channel-enable", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, channel })
+        });
+        const data = await res.json();
+        if (!data.ok) { alert("Failed: " + (data.error || "unknown error")); return; }
+        const list = (arr, fmt) => arr.map(fmt).join("\n");
+        alert(
+            "Enable " + label + " on " + ip + " (via " + (data.network || "?") + "): " + data.total + " flows.\n" +
+            data.alreadyOn + " were already on, " + data.enabled + " switched on now" +
+            (data.stuck.length ? ", " + data.stuck.length + " could not be turned on:\n\n" + list(data.stuck, s => "  " + (s.name || String(s.flow).slice(0, 8)) + " (" + s.leg + "): " + s.reason) : ".") +
+            (data.failed.length ? "\n\nFailed:\n" + list(data.failed, f => "  " + (f.name || String(f.flow).slice(0, 8)) + " (" + f.leg + "): " + f.error) : "")
+        );
+        await loadStreams(ip, id);
+    } catch (e) {
+        alert("Failed to enable flows: " + e.message);
     }
 }
 

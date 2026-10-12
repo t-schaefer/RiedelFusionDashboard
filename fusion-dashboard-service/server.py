@@ -469,6 +469,91 @@ def reset_channel(ip, channel, mode):
     }
 
 
+def _flow_link0(flow):
+    """First link of a /flows/{id} body (GET returns 'network' as a list of up to 4 legs, or a bare object)."""
+    net = (flow or {}).get("network")
+    if isinstance(net, list):
+        return net[0] if net else {}
+    return net or {}
+
+
+def enable_channel_flows(ip, channel):
+    """
+    Switches ON every flow of one logical channel - all engines (V, A, D) and
+    both legs (pri / sec), 12 flows on a Fusion channel - by POSTing
+    {"network": {"enable": "1"}} to /flows/{id}. This is the same
+    'network' write the old flow editor uses, with the device's own field
+    name ('enable', "1"/"0", as GET returns it). Checked on a live Fusion
+    (CH06 video primary: enable 0 -> 1, nothing else changed).
+    The device silently ignores the write while the flow has no destination
+    address (dst_ip_addr 0.0.0.0 - not routed yet; a 200 comes back but
+    enable stays 0), so every flow is read back afterwards and those that
+    didn't stick are reported with the reason instead of claiming success.
+    Flows that are already on are left alone. Channel flows are looked up
+    fresh from /telemetry/devices, not taken from the browser.
+    """
+    rows, _ = get_stream_rates(ip)
+    flows = []
+    for r in rows:
+        fid = r.get("flow")
+        if r.get("channel") == channel and is_valid_id(fid) and all(f["flow"] != fid for f in flows):
+            flows.append({"flow": fid, "name": r.get("name"), "leg": r.get("leg")})
+    if not flows:
+        raise LookupError("no flows found for channel %s on %s" % (channel, ip))
+
+    def path_of(fid):
+        return "/emsfp/node/v1/flows/" + fid
+
+    first, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, path_of(flows[0]["flow"]), REQUEST_TIMEOUT_SEC)
+    )
+    before = {flows[0]["flow"]: first}
+    for f in flows[1:]:
+        try:
+            before[f["flow"]] = http_get_json(used_ip, path_of(f["flow"]), REQUEST_TIMEOUT_SEC)
+        except Exception:
+            before[f["flow"]] = None
+
+    posted = []
+    failed = []
+    for f in flows:
+        link = _flow_link0(before[f["flow"]])
+        if before[f["flow"]] is None:
+            failed.append({"flow": f["flow"], "name": f["name"], "leg": f["leg"], "error": "could not read flow"})
+        elif str(link.get("enable")) != "1":
+            try:
+                http_post(used_ip, path_of(f["flow"]), {"network": {"enable": "1"}}, REQUEST_TIMEOUT_SEC)
+                posted.append(f)
+            except Exception as e:
+                failed.append({"flow": f["flow"], "name": f["name"], "leg": f["leg"], "error": str(e)})
+
+    time.sleep(0.5)
+    enabled = 0
+    stuck = []
+    for f in posted:
+        try:
+            link = _flow_link0(http_get_json(used_ip, path_of(f["flow"]), REQUEST_TIMEOUT_SEC))
+        except Exception as e:
+            failed.append({"flow": f["flow"], "name": f["name"], "leg": f["leg"], "error": "read-back failed: " + str(e)})
+            continue
+        if str(link.get("enable")) == "1":
+            enabled += 1
+        else:
+            no_dst = link.get("dst_ip_addr") in (None, "", "0.0.0.0")
+            stuck.append({
+                "flow": f["flow"], "name": f["name"], "leg": f["leg"],
+                "reason": "no destination address set (not routed yet)" if no_dst else "device did not accept enable",
+            })
+    return {
+        "network": used_net,
+        "total": len(flows),
+        "alreadyOn": len(flows) - len(posted) - len(failed),
+        "enabled": enabled,
+        "stuck": stuck,
+        "failed": failed,
+    }
+
+
 def reset_device_counters(ip):
     """
     All flows of one Fusion at once: POST /self/system {"counters_reset": "1"},
@@ -828,6 +913,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, 404)
             except Exception as e:
                 logger.error("channel reset failed for %s / CH%02d: %s", ip, channel, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/channel-enable":
+            ip = (data.get("ip") or "").strip()
+            channel = data.get("channel")
+            if not ip or ip not in STATE or not isinstance(channel, int) or isinstance(channel, bool):
+                self._send_json({"ok": False, "error": "valid ip and integer channel are required"}, 400)
+                return
+            logger.warning("enable flows requested for %s / CH%02d via API", ip, channel)
+            try:
+                result = enable_channel_flows(ip, channel)
+                logger.warning("enable flows for %s / CH%02d: %s", ip, channel, result)
+                self._send_json(dict(result, ok=True))
+            except LookupError as e:
+                self._send_json({"ok": False, "error": str(e)}, 404)
+            except Exception as e:
+                logger.error("enable flows failed for %s / CH%02d: %s", ip, channel, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/counters-reset":
             ip = (data.get("ip") or "").strip()

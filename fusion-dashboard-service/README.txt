@@ -161,6 +161,17 @@ Flow resets (in the Stream rates table / header)
                channel's flows fresh from the device; the confirmation
                shows how many flows were accepted and the channel's total
                sequence errors before -> after.
+  Enable CHxx (channel header row): switches ON every flow of that channel
+               (12 on a Fusion: V, A1-A4, D, pri + sec) in one go by writing
+               {"network": {"enable": "1"}} to /flows/{id} - the same write
+               the old flow editor does, verified on a live Fusion. The
+               device silently ignores it while a flow has no destination
+               address (0.0.0.0 = not routed yet), so every flow is read back
+               afterwards and the dialog lists the ones that stayed off and
+               why. Flows already on are left alone. Enabling does NOT route:
+               it only switches on what is already addressed (by Cerebrum /
+               NMOS). A receiver then joins the multicast groups set on its
+               flows, a sender starts sending.
   Reset all counters (button next to Load/Refresh): clears the counters
                of every flow on that Fusion at once (/self/system
                counters_reset), for when you don't want to go flow by flow.
