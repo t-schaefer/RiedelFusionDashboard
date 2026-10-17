@@ -66,22 +66,26 @@ Uninstalling
 Open PowerShell as Administrator, cd into this folder, run:
     powershell -ExecutionPolicy Bypass -File .\uninstall-task-windows.ps1
 
-Start / stop / config (one click)
-----------------------------------
-Double-click Control-FusionDashboard.bat in the repo root (like the update
-batch it asks for Administrator rights). It opens a menu:
-    1 Status   2 Start   3 Stop   4 Restart   5 Open dashboard in browser
-    6 Config   - stops the service, opens devices.json in Notepad, checks it is
-                 valid JSON (restores the backup devices.json.bak if not) and
-                 starts the service again. Edit devices.json only this way:
-                 the running service rewrites the file itself.
-    7 Show log (last 40 lines)   8 Update from git (same as the update batch)
-One-shot without the menu: Control-FusionDashboard.bat stop  (also start,
-restart, status, open, config, log, update). It works on the same Scheduled
-Task as the update script, so a stopped service stays stopped until you start
-it again (or reboot - the task starts at boot).
-The other settings (port, poll intervals) are constants at the top of
-server.py - see "Changing settings" below.
+Start / stop / config (one click each, repo root)
+--------------------------------------------------
+Double-click one of these in the repo root (each asks for Administrator
+rights via the normal Windows prompt and keeps its window open at the end):
+    Start-FusionDashboard.bat    starts the service (Scheduled Task). If the
+                                 task isn't installed yet, it runs the
+                                 dashboard in that window instead (Ctrl+C
+                                 stops it) - handy for a first test.
+    Stop-FusionDashboard.bat     stops the service and any leftover python
+                                 running this server.py. It stays off until
+                                 you start it again, update, or reboot.
+    Config-FusionDashboard.bat   edit the device list: stops the service, opens
+                                 devices.json in Notepad, checks it is valid
+                                 JSON (restores devices.json.bak if not) and
+                                 starts the service again. Edit devices.json
+                                 only this way - the running service rewrites
+                                 the file itself.
+    Update-FusionDashboard.bat   see "Upgrading" below.
+They use start-/stop-/config-windows.ps1 next to them. Port and poll
+intervals are constants at the top of server.py - see "Changing settings".
 
 Upgrading
 ---------
