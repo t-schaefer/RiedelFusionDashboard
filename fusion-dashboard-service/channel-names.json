@@ -1,0 +1,529 @@
+{
+ "ASX1.IP/HI 01": {
+  "1": "ASX1.VMON 01",
+  "8": "ASX1.MMON 01"
+ },
+ "ASX1.IP/HI 02": {
+  "1": "ASX1.VMON 02 / (AMU)",
+  "2": "ASX1.VMON 01",
+  "8": "ASX1.MMON 02"
+ },
+ "ASX2.IP/HI 01": {
+  "1": "ASX2.VMON 01",
+  "8": "ASX2.MMON 01"
+ },
+ "ASX2.IP/HI 02": {
+  "1": "ASX2.VMON 02",
+  "2": "ASX2.VMON 01",
+  "8": "ASX2.MMON 02"
+ },
+ "CS1.IP/HI 01": {
+  "1": "CS1 DESK / PATCH LEFT",
+  "2": "CS1 BROAD MON + AMU LEFT",
+  "8": "CS1 WALL MON LEFT"
+ },
+ "CS1.IP/HI 02": {
+  "6": "CS1 AMU RIGHT",
+  "8": "CS1 WALL MON RIGHT"
+ },
+ "CS1.IP/HI 03": {
+  "1": "CS2 BROAD MON + AMU LEFT",
+  "2": "CS2 DESK / PATCH LEFT",
+  "8": "CS2 WALL MON LEFT"
+ },
+ "CS10.IP/HI 01": {
+  "1": "CS10 BROAD MON + AMU LEFT",
+  "2": "CS10 DESK / PATCH LEFT",
+  "8": "CS10 WALL MON LEFT"
+ },
+ "CS10.IP/HI 02": {
+  "6": "CS10 AMU RIGHT",
+  "8": "CS10 WALL MON RIGHT"
+ },
+ "CS11.IP/HI 01": {
+  "1": "CS11 DESK / PATCH LEFT",
+  "2": "CS11 BROAD MON + AMU LEFT",
+  "8": "CS11 WALL MON LEFT"
+ },
+ "CS11.IP/HI 02": {
+  "6": "CS11 AMU RIGHT",
+  "8": "CS11 WALL MON RIGHT"
+ },
+ "CS12.IP/HI 01": {
+  "1": "CS12 BROAD MON + AMU LEFT",
+  "2": "CS12 DESK / PATCH LEFT",
+  "8": "CS12 WALL MON LEFT"
+ },
+ "CS12.IP/HI 02": {
+  "6": "CS12 AMU RIGHT",
+  "8": "CS12 WALL MON RIGHT"
+ },
+ "CS13.IP/HI 01": {
+  "1": "CS13 DESK / PATCH LEFT",
+  "2": "CS13 BROAD MON + AMU LEFT",
+  "8": "CS13 WALL MON LEFT"
+ },
+ "CS13.IP/HI 02": {
+  "6": "CS13 AMU RIGHT",
+  "8": "CS13 WALL MON RIGHT"
+ },
+ "CS14.IP/HI 01": {
+  "1": "CS14 BROAD MON + AMU LEFT",
+  "2": "CS14 DESK / PATCH LEFT",
+  "8": "CS14 WALL MON LEFT"
+ },
+ "CS14.IP/HI 02": {
+  "6": "CS14 AMU RIGHT",
+  "8": "CS14 WALL MON RIGHT"
+ },
+ "CS15.IP/HI 01": {
+  "1": "CS15 BROAD MON + AMU LEFT",
+  "2": "CS15 DESK / PATCH LEFT",
+  "8": "CS15 WALL MON LEFT"
+ },
+ "CS15.IP/HI 02": {
+  "6": "CS15 AMU RIGHT",
+  "8": "CS15 WALL MON RIGHT"
+ },
+ "CS16.IP/HI 01": {
+  "1": "CS16 BROAD MON + AMU LEFT",
+  "2": "CS16 DESK / PATCH LEFT",
+  "8": "CS16 WALL MON LEFT"
+ },
+ "CS16.IP/HI 02": {
+  "6": "CS16 AMU RIGHT",
+  "8": "CS16 WALL MON RIGHT"
+ },
+ "CS17.IP/HI 01": {
+  "1": "CS17 AMU LEFT",
+  "2": "CS17 DESK / PATCH LEFT",
+  "8": "CS17 WALL MON LEFT"
+ },
+ "CS17.IP/HI 02": {
+  "6": "CS17 BROAD MON AMU RIGHT",
+  "8": "CS17 WALL MON RIGHT"
+ },
+ "CS18.IP/HI 01": {
+  "1": "CS18 BROAD MON + AMU LEFT",
+  "2": "CS18 DESK / PATCH LEFT",
+  "8": "CS18 WALL MON LEFT"
+ },
+ "CS18.IP/HI 02": {
+  "1": "CS18 WALL MON LEFT",
+  "6": "CS18 AMU RIGHT",
+  "8": "CS18 WALL MON RIGHT"
+ },
+ "CS19.IP/HI 01": {
+  "1": "CS19 DESK / PATCH LEFT",
+  "2": "CS19 BROAD MON + AMU LEFT",
+  "8": "CS19 WALL MON LEFT"
+ },
+ "CS19.IP/HI 02": {
+  "6": "CS19 AMU RIGHT"
+ },
+ "CS2.IP/HI 01": {
+  "1": "CS2 AMU RIGHT",
+  "2": "CS2 DESK / PATCH RIGHT",
+  "8": "CS2 WALL MON RIGHT"
+ },
+ "CS2.IP/HI 02": {
+  "6": "CS2 BROAD MON + AMU LEFT",
+  "8": "CS2 WALL MON RIGHT"
+ },
+ "CS2.IP/HI 03": {
+  "6": "CS02 WALL MON BACK"
+ },
+ "CS20.IP/HI 01": {
+  "1": "CS20 BROAD MON + AMU LEFT",
+  "2": "CS20 DESK / PATCH LEFT",
+  "8": "CS20 WALL MON LEFT"
+ },
+ "CS20.IP/HI 02": {
+  "6": "CS20 AMU RIGHT",
+  "8": "CS20 WALL MON RIGHT"
+ },
+ "CS21.IP/HI 01": {
+  "1": "CS21 BROAD MON + AMU LEFT",
+  "2": "CS21 DESK / PATCH LEFT",
+  "8": "CS21 WALL MON LEFT"
+ },
+ "CS21.IP/HI 02": {
+  "6": "CS21 AMU RIGHT",
+  "8": "CS21 WALL MON RIGHT"
+ },
+ "CS22.IP/HI 01": {
+  "1": "CS22 BROAD MON + AMU LEFT",
+  "2": "CS22 DESK / PATCH LEFT",
+  "8": "CS22 WALL MON LEFT"
+ },
+ "CS22.IP/HI 02": {
+  "6": "CS22 AMU RIGHT",
+  "8": "CS22 WALL MON RIGHT"
+ },
+ "CS23.IP/HI 01": {
+  "8": "CS23 WALL MON LEFT"
+ },
+ "CS23.IP/HI 02": {
+  "6": "CS23 AMU RIGHT",
+  "8": "CS23 WALL MON RIGHT"
+ },
+ "CS24.IP/HI 01": {
+  "1": "CS24 AMU LEFT",
+  "2": "CS24 DESK / PATCH LEFT",
+  "8": "CS24 WALL MON LEFT"
+ },
+ "CS24.IP/HI 02": {
+  "6": "CS24 BROAD MON + AMU RIGHT",
+  "8": "CS24 WALL MON RIGHT"
+ },
+ "CS25.IP/HI 01": {
+  "1": "CS25 BROAD MON + AMU LEFT",
+  "2": "CS25 DESK / PATCH LEFT",
+  "6": "CS25 WALL MON LEFT"
+ },
+ "CS25.IP/HI 02": {
+  "6": "CS25 AMU RIGHT",
+  "8": "CS25 WALL MON RIGHT"
+ },
+ "CS26.IP/HI 01": {
+  "1": "CS26 BROAD MON + AMU RIGHT",
+  "2": "CS26 DESK / PATCH LEFT",
+  "8": "CS26 WALL MON LEFT"
+ },
+ "CS26.IP/HI 02": {
+  "6": "CS26 AMU LEFT",
+  "8": "CS26 WALL MON RIGHT"
+ },
+ "CS27.IP/HI 01": {
+  "1": "CS27 BROAD MON + AMU LEFT",
+  "2": "CS27 DESK / PATCH LEFT",
+  "8": "CS27 WALL MON LEFT"
+ },
+ "CS27.IP/HI 02": {
+  "6": "CS27 AMU RIGHT",
+  "8": "CS27 WALL MON RIGHT"
+ },
+ "CS28.IP/HI 01": {
+  "1": "CS28 BROAD MON + AMU LEFT",
+  "2": "CS28 DESK / PATCH LEFT",
+  "8": "CS28 WALL MON LEFT"
+ },
+ "CS28.IP/HI 02": {
+  "6": "CS28 AMU RIGHT",
+  "8": "CS28 WALL MON RIGHT"
+ },
+ "CS29.IP/HI 01": {
+  "1": "CS29 BROAD MON + AMU LEFT",
+  "2": "CS29 DESK / PATCH LEFT",
+  "8": "CS29 WALL MON LEFT"
+ },
+ "CS29.IP/HI 02": {
+  "6": "CS29 AMU RIGHT",
+  "8": "CS29 WALL MON RIGHT"
+ },
+ "CS3.IP/HI 01": {
+  "1": "CS3 DESK / PATCH LEFT",
+  "2": "CS3 BROAD MON + AMU LEFT",
+  "3": "CS3 BROAD MON + AMU MID",
+  "8": "CS3 WALL MON LEFT"
+ },
+ "CS3.IP/HI 02": {
+  "4": "CS3 DESK / PATCH RIGHT",
+  "6": "CS3 AMU RIGHT",
+  "8": "CS3 WALL MON RIGHT"
+ },
+ "CS4.IP/HI 01": {
+  "1": "CS4 BROAD MON + AMU LEFT",
+  "2": "CS4 DESK / PATCH LEFT",
+  "8": "CS4 WALL MON LEFT"
+ },
+ "CS4.IP/HI 02": {
+  "6": "CS4 AMU RIGHT",
+  "8": "CS4 WALL MON RIGHT"
+ },
+ "CS5.IP/HI 01": {
+  "1": "CS5 DESK / PATCH LEFT",
+  "2": "CS5 BROAD MON + AMU LEFT",
+  "8": "CS5 WALL MON LEFT"
+ },
+ "CS5.IP/HI 02": {
+  "3": "CS5 AMU RIGHT",
+  "4": "CS5 DESK / PATCH RIGHT",
+  "8": "CS5 WALL MON RIGHT"
+ },
+ "CS6.IP/HI 01": {
+  "1": "CS6 BROAD MON + AMU LEFT",
+  "2": "CS6 DESK / PATCH LEFT",
+  "6": "CS6 WALL MON CENTER",
+  "8": "CS6 WALL MON LEFT"
+ },
+ "CS6.IP/HI 02": {
+  "1": "CS6 WALL MON RIGHT temp",
+  "6": "CS6 AMU RIGHT",
+  "8": "CS6 WALL MON RIGHT"
+ },
+ "CS7.IP/HI 01": {
+  "1": "CS7 BROAD MON + AMU LEFT",
+  "2": "CS7 DESK / PATCH LEFT",
+  "8": "CS7 WALL MON LEFT"
+ },
+ "CS7.IP/HI 02": {
+  "6": "CS7 AMU RIGHT",
+  "8": "CS7 WALL MON RIGHT"
+ },
+ "CS8.IP/HI 01": {
+  "1": "CS8 BROAD MON + AMU LEFT",
+  "2": "CS8 DESK / PATCH LEFT",
+  "8": "CS8 WALL MON LEFT"
+ },
+ "CS8.IP/HI 02": {
+  "6": "CS8 AMU RIGHT",
+  "8": "CS8 WALL MON RIGHT"
+ },
+ "CS9.IP/HI 01": {
+  "1": "CS9 DESK / PATCH LEFT",
+  "2": "CS9 BROAD MON + AMU LEFT",
+  "8": "CS9 WALL MON LEFT"
+ },
+ "CS9.IP/HI 02": {
+  "6": "CS9 AMU RIGHT",
+  "8": "CS9 WALL MON RIGHT"
+ },
+ "GFX.IP/HI 01": {
+  "6": "GFX WALL MON / CENTRE L",
+  "8": "GFX WALL MON / CENTRE R"
+ },
+ "GFX.IP/HI 02": {
+  "6": "GFX WALL MON / LEFT L",
+  "8": "GFX WALL MON / LEFT R"
+ },
+ "GFX.IP/HI 03": {
+  "6": "GFX WALL MON / RIGHT L",
+  "8": "GFX WALL MON / RIGHT R"
+ },
+ "GFX.IP/S 01": {
+  "1": "GFX RX 1",
+  "2": "GFX RX 2",
+  "3": "GFX RX 3"
+ },
+ "GFX.IP/S 02": {
+  "1": "GFX RX 4",
+  "2": "GFX RX 5",
+  "3": "GFX RX 6"
+ },
+ "GFX.IP/S 03": {
+  "1": "GFX RX 7",
+  "2": "GFX RX 8",
+  "3": "GFX RX 9"
+ },
+ "GR1.IP/HI 01": {
+  "1": "GR RX 1",
+  "2": "GR RX 2",
+  "3": "GR RX 3"
+ },
+ "MC.IP/HI 01": {
+  "1": "MC.AMON L",
+  "2": "MC.AMON C",
+  "6": "MC.MMON 01",
+  "8": "MC.MMON 02"
+ },
+ "MC.IP/S 01": {
+  "1": "MC. AMON R",
+  "6": "MC.VMON 01",
+  "8": "MC.MMON 03"
+ },
+ "OC.IP/HI 04": {
+  "1": "AVMON 05 (OLD)",
+  "2": "AVMON 06 (OLD)",
+  "3": "AVMON 10 / ENG SUP (OLD)",
+  "4": "AVMON 09 (OLD)",
+  "6": "AVMON 12 / OPS SUP2 (OLD)"
+ },
+ "OC.IP/S 01 A.1": {
+  "1": "AVMON 01",
+  "2": "AVMON 06"
+ },
+ "OC.IP/S 01 A.2": {
+  "1": "VMON 10",
+  "2": "MMON 01"
+ },
+ "OC.IP/S 01 A.3": {
+  "1": "MMON 06",
+  "2": "MMON 11"
+ },
+ "OC.IP/S 01 A.4": {
+  "1": "MMON 16",
+  "2": "MMON 19"
+ },
+ "OC.IP/S 01 B.1": {
+  "1": "AVMON 02",
+  "2": "AVMON 07"
+ },
+ "OC.IP/S 01 B.2": {
+  "1": "AVMON 11",
+  "2": "MMON 02"
+ },
+ "OC.IP/S 01 B.4": {
+  "1": "MMON 17",
+  "2": "MMON 20"
+ },
+ "OC.IP/S 01 C.1": {
+  "1": "AVMON 03",
+  "2": "AVMON 08"
+ },
+ "OC.IP/S 01 C.2": {
+  "1": "VMON 11",
+  "2": "MMON 03"
+ },
+ "OC.IP/S 01 C.3": {
+  "1": "MMON 08",
+  "2": "MMON 13"
+ },
+ "OC.IP/S 01 C.4": {
+  "1": "MMON 07",
+  "2": "MMON 12"
+ },
+ "OC.IP/S 02 A.1": {
+  "1": "AVMON 04",
+  "2": "AVMON 09"
+ },
+ "OC.IP/S 02 A.2": {
+  "1": "AVMON 12",
+  "2": "MMON 04"
+ },
+ "OC.IP/S 02 A.3": {
+  "1": "MMON 09",
+  "2": "MMON 14"
+ },
+ "OC.IP/S 02 B.1": {
+  "1": "AVMON 05",
+  "2": "AVMON 10"
+ },
+ "OC.IP/S 02 B.2": {
+  "1": "VMON 12",
+  "2": "MMON 05"
+ },
+ "OC.IP/S 02 B.3": {
+  "1": "MMON 10",
+  "2": "MMON 15"
+ },
+ "PCR1.IP/HI 01": {
+  "1": "PCR1.VMON 01",
+  "2": "PCR1.VMON 02",
+  "6": "PCR1 / WALL MON 1",
+  "8": "PCR1 / WALL MON 3"
+ },
+ "PCR1.IP/HI 02": {
+  "1": "PCR1.VMON 03",
+  "2": "PCR1.VMON 04",
+  "6": "PCR1 / WALL MON 2",
+  "8": "PCR1 / WALL MON 4"
+ },
+ "PCR1.IP/S 01": {
+  "1": "PCR1.HI/S 01",
+  "2": "PCR1 RX VSO-X",
+  "6": "PCR1 / VSO MV1",
+  "8": "PCR1 / VSO MV2"
+ },
+ "PCR1.IP/S 02": {
+  "1": "PCR 1 / LIGHTING TOP",
+  "2": "PCR 1 / LIGHTING BOT",
+  "8": "PCR1 / LVR MV1"
+ },
+ "PCR1.IP/S 03": {
+  "1": "PCR1.VMON 08",
+  "2": "PCR1.VMON 09",
+  "3": "PCR1.VMON 05"
+ },
+ "PCR2.IP/HI 01": {
+  "2": "PCR2.VMON 01",
+  "6": "PCR2.MMON 02",
+  "8": "PCR2.MMON 04"
+ },
+ "PCR2.IP/HI 02": {
+  "1": "PCR2.VMON 02",
+  "6": "PCR2.MMON 01",
+  "8": "PCR2.MMON 03"
+ },
+ "PCR2.IP/S 01": {
+  "1": "PCR2.AMON 03",
+  "2": "PCR2.VMON 03",
+  "6": "PCR2.MMON 05",
+  "8": "PCR2.MMON 06"
+ },
+ "PCR3.IP/HI 01": {
+  "1": "PCR 3 RX 1",
+  "6": "PCR 3 RX 2",
+  "8": "PCR 3 RX 3"
+ },
+ "PCR3.IP/HI 02": {
+  "1": "PCR 3 RX 4",
+  "6": "PCR 3 RX 5",
+  "8": "PCR 3 RX 6"
+ },
+ "PCR3.IP/S 01": {
+  "1": "PCR 3 RX 7",
+  "2": "PCR 3 Desk2 Mon C",
+  "6": "PCR 3 RX 8",
+  "8": "PCR 3 RX 9"
+ },
+ "REPLAY.IP/HI 01": {
+  "6": "REPLAY WALL MON / LEFT L",
+  "8": "REPLAY WALL MON / LEFT R"
+ },
+ "REPLAY.IP/HI 02": {
+  "4": "REPLAY WALL MON / CENTRE R",
+  "6": "REPLAY WALL MON / CENTRE C",
+  "8": "REPLAY WALL MON / CENTRE L"
+ },
+ "REPLAY.IP/HI 03": {
+  "6": "REPLAY WALL MON / RIGHT L",
+  "8": "REPLAY WALL MON / RIGHT R"
+ },
+ "REPLAY.IP/S 01": {
+  "1": "REPLAY RX 7",
+  "2": "REPLAY RX 8",
+  "3": "REPLAY RX 9",
+  "4": "REPLAY RX 1"
+ },
+ "REPLAY.IP/S 02": {
+  "1": "REPLAY RX 2",
+  "2": "REPLAY RX 3",
+  "3": "REPLAY RX 4",
+  "4": "REPLAY RX 5"
+ },
+ "REPLAY.IP/S 03": {
+  "1": "REPLAY RX 6",
+  "2": "REPLAY RX 10",
+  "3": "REPLAY RX 11",
+  "4": "REPLAY RX 12"
+ },
+ "REPLAY.IP/S 04": {
+  "1": "REPLAY RX 13",
+  "2": "REPLAY RX 14",
+  "6": "REPLAY SUP MV",
+  "8": "REPLAY SUP MV"
+ },
+ "SCR1.IP/HI 01": {
+  "1": "SCR1.VMON 01",
+  "2": "SCR1.VMON 02",
+  "8": "SCR1.LEFT MVW"
+ },
+ "SCR1.IP/HI 02": {
+  "1": "SCR1.VMON 02",
+  "2": "SCR1.VMON 02",
+  "8": "SCR1.MMON 02"
+ },
+ "ST1.IP/HI 01": {
+  "1": "STD RX 1",
+  "2": "STUDIO LED DESK WALL",
+  "3": "MON 01",
+  "8": "Projector"
+ },
+ "ST1.IP/HI 02": {
+  "1": "MON 02",
+  "2": "STD RX 5",
+  "3": "STD RX 6",
+  "8": "ST1 LED Screen"
+ }
+}

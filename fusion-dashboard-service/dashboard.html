@@ -455,6 +455,10 @@ function toggleDetail(ip) {
     if (row && detail) row.classList.toggle("open", !detail.classList.contains("hidden"));
 }
 
+function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function cssId(ip) { return ip.replace(/\./g, "-"); }
 
 async function removeDevice(ip, name) {
@@ -822,8 +826,9 @@ function streamsSectionHtml(ip) {
               `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
             : "";
         const open = !!streamGroupOpen[ip + "|" + channel];
-        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:#dc3545;" : "color:#6c757d;"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
-        body += rows.map(s => `<tr class="chRow${open ? "" : " hidden"}" data-ch="${channel}"><td>${s.name || "-"}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
+        const btnName = rows[0].label ? escapeHtml(rows[0].label) : "";
+        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""}${btnName ? ` <span style="color:#0d6efd">${btnName}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:#dc3545;" : "color:#6c757d;"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
+        body += rows.map(s => `<tr class="chRow${open ? "" : " hidden"}" data-ch="${channel}"><td>${s.name || "-"}${s.label ? ` <span class="muted">${escapeHtml(s.label)}</span>` : ""}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
     });
     return `<div style="max-height:320px; overflow-y:auto;"><table class="mini-table">` +
         "<thead><tr><th>Name</th><th>Leg</th><th>Flow</th><th>pkt/s</th><th>Seq err</th><th>Reset</th></tr></thead><tbody>" +

@@ -41,6 +41,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
 DEVICES_EXAMPLE_FILE = BASE_DIR / "devices.example.json"
 SEEDED_FILE = BASE_DIR / "devices.seeded.json"
+CHANNEL_NAMES_FILE = BASE_DIR / "channel-names.json"
 DASHBOARD_FILE = BASE_DIR / "dashboard.html"
 LOG_FILE = BASE_DIR / "service.log"
 
@@ -309,6 +310,42 @@ def set_sdi_bitrate(ip, value):
 ESSENCE_LETTER = {"video": "V", "audio": "A", "ancillary": "D"}
 
 
+def _norm_device_key(name):
+    """Make device names comparable: the router table writes GFX.IP/HI 01 and
+    GR2.IP/HI 01 where devices.json has GFX1.IP/HI 01 and GR2.IP/HI.01."""
+    n = re.sub(r"\s+", " ", str(name or "").strip().lower())
+    n = re.sub(r"^gfx\d+", "gfx", n)
+    return re.sub(r"\.(\d+)$", r" \1", n)
+
+
+def load_channel_names():
+    """channel-names.json (built by build_channel_names.py from the router's
+    destination table): {device name: {receiver channel: button name}}."""
+    try:
+        raw = json.loads(CHANNEL_NAMES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {_norm_device_key(dev): chans for dev, chans in raw.items()}
+
+
+CHANNEL_NAMES = load_channel_names()
+
+
+def channel_label(ip, channel, ch_type):
+    """Button name of a receiver channel, or None. Only receivers (decapsulator)
+    appear in the destination table; a device is matched by its name in
+    devices.json or by its own hostname."""
+    if ch_type != "decapsulator" or not isinstance(channel, int):
+        return None
+    with STATE_LOCK:
+        rec = STATE.get(ip) or {}
+    for name in (rec.get("name"), ((rec.get("config") or {}).get("ipconfig") or {}).get("hostname")):
+        label = (CHANNEL_NAMES.get(_norm_device_key(name)) or {}).get(str(channel))
+        if label:
+            return label
+    return None
+
+
 def get_stream_rates(ip):
     """
     On-demand only: live per-flow packet rate/count/sequence-error telemetry
@@ -326,6 +363,7 @@ def get_stream_rates(ip):
     for chan in (data or {}).get("devices", []):
         ch = chan.get("channel")
         ch_label = "CH%02d" % ch if isinstance(ch, int) else "CH--"
+        label = channel_label(ip, ch, chan.get("type"))
         seen = {}  # essence -> how many engines of it already named on this channel
         for engine in chan.get("engines", []):
             essence = engine.get("essence") or "stream"
@@ -337,6 +375,7 @@ def get_stream_rates(ip):
                     "channel": ch,
                     "chType": chan.get("type"),
                     "name": name,
+                    "label": label,
                     "essence": engine.get("essence"),
                     "leg": flow.get("type"),
                     "flow": flow.get("flow"),

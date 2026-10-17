@@ -21,6 +21,8 @@ devices.example.json          the tracked starting-point device list - only used
                               fresh devices.json on first run
 devices.seeded.json         (auto-created, not in git) remembers which devices.example.json
                               entries were already offered to devices.json - see "New devices"
+channel-names.json            router button name per device receiver channel (see "Button names")
+build_channel_names.py        regenerates channel-names.json from a Cerebrum destination-table export
 install-task-windows.ps1      one-time setup: registers the Windows Scheduled Task
 uninstall-task-windows.ps1    removes the scheduled task and firewall rule again
 ../update-windows.ps1         (repo root) pulls the latest version from git and restarts the
@@ -147,6 +149,24 @@ collapse it (all collapsed by default; the header always shows the flow
 count and the channel's total sequence errors, in red when above 0, and its
 Clr / Reset buttons work while collapsed). Open/closed state is kept
 across the 4s auto-refresh.
+
+Button names on the streams (channel-names.json)
+-------------------------------------------------
+In the Stream rates table every receiver channel shows the name of its router
+button next to CHxx - in blue on the "CH01 RX" header and in grey on each
+stream row, e.g. "CH01 RX CS3 DESK / PATCH LEFT". The names come from the
+Cerebrum destination-table export: channel-names.json (tracked in git) maps
+device name + receiver channel to the button name ("_Alternate Mnemonic 1",
+"|" shown as " / "; "N/A", "0" and empty names are skipped). Only receivers
+(RX) are in a destination table, so TX channels have no name. The device is
+matched by its name in devices.json or by its hostname (GFX1.* / GR2.IP/HI.01
+are matched to the table's GFX.* / GR2.IP/HI 01). No extra device queries.
+Not in the current export: DCR/DCB.IP/HI, OC.IP/HI 01-03/05-07, OC.IP/S 02 A.4.
+
+To refresh after the router table changed, export it again as tab-separated
+text (an .rtf copy works on a Mac) and run, then commit channel-names.json and
+restart the service (an update does that):
+    python build_channel_names.py "DST new.txt"
 
 Flow resets (in the Stream rates table / header)
   Clr          per flow: clears just that flow's packet / sequence-error
