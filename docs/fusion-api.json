@@ -685,7 +685,7 @@
         "GET"
       ],
       "source": "fusionFunctions.js: getLLDPinfo()",
-      "description": "LLDP neighbor discovery per physical interface.",
+      "description": "LLDP neighbor discovery per physical interface (live-checked on Fusion and MuoN: GET /lldp returns configuration plus one neighbor entry per interface; an empty chassis/port and ttl 0 means nothing was heard). chassis is the switch MAC address.",
       "response_sample": {
         "configuration": {
           "rate": "45",

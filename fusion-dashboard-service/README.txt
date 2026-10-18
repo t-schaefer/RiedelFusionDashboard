@@ -144,6 +144,14 @@ outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
 
+LLDP neighbours (expanded device row, under the port table)
+-------------------------------------------------------------
+Shows which switch and switch port each interface is plugged into (GET
+/lldp: chassis = the switch's MAC address, port = its port name, TTL). Only
+interfaces that actually heard a neighbour are listed. It is part of the slow
+config refresh (every 10 min, one extra GET per device), not the 30s health
+poll, and works on MuoN cards too.
+
 Color bars and stream rates (per device, on demand)
 ------------------------------------------------------
 In the expanded device row, "Color bars" and "Stream rates" each start

@@ -715,6 +715,7 @@ def fetch_device_config(ip):
         interfaces = safe("/emsfp/node/v1/self/interfaces")
         nmos = safe("/emsfp/node/v1/self/diag/nmos")
         syslog = safe("/emsfp/node/v1/self/syslog")
+        lldp = safe("/emsfp/node/v1/lldp")   # per-interface switch neighbour (chassis MAC + switch port)
         sdi = safe("/emsfp/node/v1/sdi/")   # SDI operating bit rate; MuoN cards don't have it (None)
 
         ports = []
@@ -740,6 +741,7 @@ def fetch_device_config(ip):
                 "nmos": nmos,
                 "syslog": syslog,
                 "sdi": sdi,
+                "lldp": lldp,
                 "ports": ports,
             }
             rec["configError"] = None

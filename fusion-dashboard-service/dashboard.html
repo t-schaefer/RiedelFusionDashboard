@@ -409,6 +409,20 @@ function licenseBadges(license) {
         .map(([k, v]) => `<span class="badge secondary" style="opacity:${v === "licensed" ? 1 : 0.4}">${k}</span>`)
         .join(" ");
 }
+// LLDP: which switch / switch port each interface is plugged into
+// (GET /lldp - chassis is the switch's MAC; empty chassis = nothing heard).
+function lldpTable(lldp) {
+    if (!lldp) return "";
+    const seen = (lldp.neighbor || []).filter(n => n.chassis);
+    const rows = seen.map(n =>
+        `<tr><td>P${escapeHtml(n.interface)}</td><td style="font-family:monospace">${escapeHtml(n.chassis)}</td><td>${escapeHtml(n.port || "-")}</td><td>${escapeHtml(n.ttl ?? "-")}</td></tr>`).join("");
+    const cfg = lldp.configuration || {};
+    return `<div class="muted small" style="margin-top:8px; font-weight:600;" title="LLDP: the switch each interface is connected to${cfg.enable_rx === "0" ? " (LLDP receive is OFF on this device)" : ""}">LLDP neighbours</div>` +
+        (rows
+            ? `<table class="mini-table"><thead><tr><th>If</th><th>Switch (chassis)</th><th>Switch port</th><th>TTL</th></tr></thead><tbody>${rows}</tbody></table>`
+            : `<span class="muted small">no neighbours seen</span>`);
+}
+
 function portsTable(ports) {
     if (!ports || !ports.length) return '<span class="muted small">no data</span>';
     const rows = ports.map(p => {
@@ -602,7 +616,7 @@ function renderRow(dev) {
             <div style="margin-top:4px">${licenseBadges(cfg.license)}</div>
             <div class="muted small" style="margin-top:4px">Config loaded: ${fmtTime(dev.configFetchedAt)}${dev.configError ? " - error: " + dev.configError : ""}</div>
           </div>
-          <div>${deviceType(dev) === "MuoN" ? '<span class="muted small">no SFP port breakdown on MuoN cards</span>' : portsTable(cfg.ports)}</div>
+          <div>${deviceType(dev) === "MuoN" ? '<span class="muted small">no SFP port breakdown on MuoN cards</span>' : portsTable(cfg.ports)}${lldpTable(cfg.lldp)}</div>
           <div style="margin-left:auto">
             <button class="btn danger" id="reboot-${id}" title="Reboot this device">Reboot</button>
             <button class="btn" id="removeDevice-${id}" title="Remove this device from the dashboard (the device itself is not touched)">Remove from dashboard</button>
