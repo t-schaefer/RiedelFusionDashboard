@@ -693,6 +693,21 @@ def poll_device_health(ip):
             INFLIGHT.discard(ip)
 
 
+def refresh_lldp(ip):
+    """Fetch one device's LLDP neighbours right now (the "Get LLDP info" button)
+    instead of waiting for the 10-minute config refresh."""
+    data, _used_ip, _used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/lldp", CONFIG_TIMEOUT_SEC)
+    )
+    with STATE_LOCK:
+        rec = STATE.get(ip)
+        if rec is not None:
+            if rec.get("config") is None:
+                rec["config"] = {}
+            rec["config"]["lldp"] = data
+            rec["config"]["lldpFetchedAt"] = now_iso()
+
+
 def fetch_device_config(ip):
     def safe(path):
         try:
@@ -1092,6 +1107,25 @@ class Handler(BaseHTTPRequestHandler):
             ok_count = sum(1 for r in results.values() if r["ok"])
             logger.warning("syslog config done: %d/%d succeeded", ok_count, len(ips))
             self._send_json({"ok": True, "succeeded": ok_count, "total": len(ips), "results": results})
+        elif self.path == "/api/lldp/refresh":
+            # Reachable devices only: an offline one would just burn two timeouts.
+            with STATE_LOCK:
+                ips = [ip for ip, rec in STATE.items() if rec.get("status") != "offline"]
+
+            def get_one(ip):
+                try:
+                    refresh_lldp(ip)
+                    return ip, None
+                except Exception as e:
+                    return ip, str(e)
+
+            failed = {}
+            with ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
+                for ip, err in pool.map(get_one, ips):
+                    if err:
+                        failed[ip] = err
+            logger.info("LLDP refresh: %d/%d devices answered", len(ips) - len(failed), len(ips))
+            self._send_json({"ok": True, "updated": len(ips) - len(failed), "total": len(ips), "failed": failed})
         elif self.path == "/api/polling":
             enabled = bool(data.get("enabled", True))
             if enabled:

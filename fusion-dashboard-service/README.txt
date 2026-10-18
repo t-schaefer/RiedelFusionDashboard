@@ -144,13 +144,20 @@ outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
 
-LLDP neighbours (expanded device row, under the port table)
--------------------------------------------------------------
-Shows which switch and switch port each interface is plugged into (GET
-/lldp: chassis = the switch's MAC address, port = its port name, TTL). Only
-interfaces that actually heard a neighbour are listed. It is part of the slow
-config refresh (every 10 min, one extra GET per device), not the 30s health
-poll, and works on MuoN cards too.
+LLDP neighbours
+----------------
+Shows which switch and switch port each interface is plugged into (GET /lldp:
+chassis = the switch's MAC address, port = the switch's own port name such as
+Ethernet3/17/3, TTL). Interfaces are named like the device's own ports: e1
+(Red), e2 (Blue), oob - the LLDP interface numbers 1/2/3 in the order of
+/self/interfaces. Only interfaces that heard a neighbour are listed.
+- Per device: in the expanded row, under the port table. Part of the slow
+  config refresh (every 10 min, one extra GET per device), also on MuoN cards.
+- Whole fleet: toolbar button "Get LLDP info" reads LLDP from every reachable
+  device right now (CONCURRENCY at a time, offline devices skipped) and shows
+  one table (Device, IP, Interface, Switch chassis, Switch port, TTL). It
+  follows the group buttons and the text / column filters; "Download CSV"
+  saves the table as it is shown.
 
 Color bars and stream rates (per device, on demand)
 ------------------------------------------------------

@@ -72,6 +72,7 @@
         <input type="text" id="filterInput" placeholder="Filter: IP, name or tag" style="width:220px">
         <label class="small"><input type="checkbox" id="onlyProblemsCheck"> show only problems</label>
         <button type="button" class="btn" id="syslogToggleBtn">Syslog (all devices)</button>
+        <button type="button" class="btn" id="lldpBtn" title="Read LLDP (switch + switch port per interface) from every reachable device now">Get LLDP info</button>
         <form id="addDeviceForm">
             <input type="text" id="newDeviceIp" placeholder="Device IP" required style="width:130px">
             <input type="text" id="newDeviceName" placeholder="Name (optional)" style="width:150px">
@@ -115,6 +116,23 @@
                 <span id="syslogResult" class="small muted"></span>
             </div>
         </form>
+    </div>
+
+    <div id="lldpPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <div class="small muted" id="lldpPanelInfo"></div>
+            <div>
+                <button class="btn" id="lldpRefreshBtn" title="Read LLDP from all reachable devices again">&#8635; Refresh</button>
+                <button class="btn" id="lldpCsvBtn" title="Download the table below as CSV">Download CSV</button>
+                <button class="btn" id="closeLldpPanelBtn" title="Close">&times; Close</button>
+            </div>
+        </div>
+        <div style="max-height:420px; overflow-y:auto;">
+            <table class="mini-table" style="width:100%">
+                <thead><tr><th>Device</th><th>IP</th><th>Interface</th><th>Switch (chassis)</th><th>Switch port</th><th>TTL</th></tr></thead>
+                <tbody id="lldpPanelBody"></tbody>
+            </table>
+        </div>
     </div>
 
     <div id="warningsPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
@@ -411,11 +429,17 @@ function licenseBadges(license) {
 }
 // LLDP: which switch / switch port each interface is plugged into
 // (GET /lldp - chassis is the switch's MAC; empty chassis = nothing heard).
+// LLDP interface 1/2/3 are the device's e1 (Red), e2 (Blue) and oob ports, in the
+// same order as /self/interfaces; the switch port name is what the switch reports.
+function lldpIfName(n) {
+    return ({ 1: "e1 (Red)", 2: "e2 (Blue)", 3: "oob" })[n] || "If " + n;
+}
+
 function lldpTable(lldp) {
     if (!lldp) return "";
     const seen = (lldp.neighbor || []).filter(n => n.chassis);
     const rows = seen.map(n =>
-        `<tr><td>P${escapeHtml(n.interface)}</td><td style="font-family:monospace">${escapeHtml(n.chassis)}</td><td>${escapeHtml(n.port || "-")}</td><td>${escapeHtml(n.ttl ?? "-")}</td></tr>`).join("");
+        `<tr><td>${escapeHtml(lldpIfName(n.interface))}</td><td style="font-family:monospace">${escapeHtml(n.chassis)}</td><td>${escapeHtml(n.port || "-")}</td><td>${escapeHtml(n.ttl ?? "-")}</td></tr>`).join("");
     const cfg = lldp.configuration || {};
     return `<div class="muted small" style="margin-top:8px; font-weight:600;" title="LLDP: the switch each interface is connected to${cfg.enable_rx === "0" ? " (LLDP receive is OFF on this device)" : ""}">LLDP neighbours</div>` +
         (rows
@@ -454,6 +478,7 @@ function deviceMatchesFilter(dev) {
 function applyDisplay() {
     sortedDevices().forEach(renderRow);
     updateHeaderIndicators();
+    renderLldpPanel();
 }
 
 function setStatusFilter(status) {
@@ -712,6 +737,60 @@ function renderWarningsPanel(devices) {
     });
 }
 
+// ---- fleet-wide LLDP table (the "Get LLDP info" button) ----
+let lldpFetchedAt = null;
+function lldpRows() {
+    const rows = [];
+    sortedDevices().filter(d => d.status !== "offline" && deviceMatchesFilter(d)).forEach(d => {
+        const name = (d.config && d.config.ipconfig && d.config.ipconfig.hostname) || d.name || "-";
+        const seen = ((d.config && d.config.lldp && d.config.lldp.neighbor) || []).filter(n => n.chassis);
+        if (!seen.length) rows.push({ name, ip: d.ip, iface: "-", chassis: "", port: "no neighbours seen", ttl: "" });
+        seen.forEach(n => rows.push({ name, ip: d.ip, iface: lldpIfName(n.interface), chassis: n.chassis, port: n.port || "-", ttl: n.ttl ?? "" }));
+    });
+    return rows;
+}
+function renderLldpPanel() {
+    if (document.getElementById("lldpPanel").classList.contains("hidden")) return;
+    const rows = lldpRows();
+    document.getElementById("lldpPanelBody").innerHTML = rows.map(r =>
+        `<tr><td>${escapeHtml(r.name)}</td><td style="font-family:monospace">${escapeHtml(r.ip)}</td><td>${escapeHtml(r.iface)}</td>` +
+        `<td style="font-family:monospace">${escapeHtml(r.chassis)}</td><td>${escapeHtml(r.port)}</td><td>${escapeHtml(r.ttl)}</td></tr>`).join("") ||
+        `<tr><td colspan="6" class="muted small">No reachable devices match the current filter.</td></tr>`;
+    document.getElementById("lldpPanelInfo").textContent =
+        `LLDP: which switch and switch port each interface is connected to. ${rows.length} rows` +
+        (groupFilter ? ` (group ${groupFilter})` : "") + (lldpFetchedAt ? `, read ${fmtTime(lldpFetchedAt)}` : "") +
+        ". Follows the group / text filters.";
+}
+async function getLldpInfo() {
+    const btn = document.getElementById("lldpBtn"), again = document.getElementById("lldpRefreshBtn");
+    document.getElementById("lldpPanel").classList.remove("hidden");
+    document.getElementById("lldpPanelInfo").textContent = "Reading LLDP from all reachable devices ...";
+    btn.disabled = again.disabled = true;
+    try {
+        const res = await fetch("/api/lldp/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const data = await res.json();
+        lldpFetchedAt = new Date().toISOString();
+        await refresh();
+        renderLldpPanel();
+        const failed = Object.keys(data.failed || {}).length;
+        if (failed) document.getElementById("lldpPanelInfo").textContent += ` ${failed} device(s) did not answer.`;
+    } catch (e) {
+        document.getElementById("lldpPanelInfo").textContent = "Failed to read LLDP: " + e.message;
+    } finally {
+        btn.disabled = again.disabled = false;
+    }
+}
+function downloadLldpCsv() {
+    const q = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    const lines = ["Device,IP,Interface,Switch chassis,Switch port,TTL"].concat(
+        lldpRows().map(r => [r.name, r.ip, r.iface, r.chassis, r.port, r.ttl].map(q).join(",")));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/csv" }));
+    a.download = "lldp-" + new Date().toISOString().slice(0, 10) + ".csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 function toggleWarningsPanel() {
     document.getElementById("warningsPanel").classList.toggle("hidden");
 }
@@ -739,6 +818,7 @@ async function refresh() {
         pruneRemovedRows(data.devices);
         renderSummary(data.summary);
         renderWarningsPanel(data.devices);
+        renderLldpPanel();
         updateHeaderIndicators();
         document.getElementById("lastUpdate").textContent = "service data as of " + fmtTime(data.generatedAt);
         updatePollingButton(data.pollingEnabled);
@@ -1154,6 +1234,10 @@ document.getElementById("addDeviceForm").addEventListener("submit", async (ev) =
     refresh();
 });
 
+document.getElementById("lldpBtn").addEventListener("click", getLldpInfo);
+document.getElementById("lldpRefreshBtn").addEventListener("click", getLldpInfo);
+document.getElementById("lldpCsvBtn").addEventListener("click", downloadLldpCsv);
+document.getElementById("closeLldpPanelBtn").addEventListener("click", () => document.getElementById("lldpPanel").classList.add("hidden"));
 document.getElementById("syslogToggleBtn").addEventListener("click", () => {
     document.getElementById("syslogPanel").classList.toggle("hidden");
 });
