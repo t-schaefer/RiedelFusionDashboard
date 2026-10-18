@@ -27,6 +27,7 @@ import json
 import logging
 import logging.handlers
 import re
+import sys
 import threading
 import time
 import urllib.request
@@ -36,6 +37,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
+
+import config_tool
 
 BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
@@ -837,7 +840,7 @@ def state_payload():
         return _state_cache["raw"], _state_cache["gz"]
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if args and str(args[0]).startswith("GET /api/state"):
             return      # polled every 4s by every open tab - would flood service.log
@@ -852,6 +855,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.config_get():       # /config, /config/login|logout, /api/config/* (password protected)
+            return
         if self.path == "/" or self.path == "/index.html":
             try:
                 body = DASHBOARD_FILE.read_bytes()
@@ -899,6 +904,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self.config_post():
+            return
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b"{}"
         try:
@@ -1139,7 +1146,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
 
+def set_config_password():
+    """`python server.py --set-password`: set the login password of the /config page."""
+    import getpass
+    pw = getpass.getpass("New config password: ")
+    if len(pw) < 8:
+        raise SystemExit("Password must be at least 8 characters.")
+    if pw != getpass.getpass("Repeat password: "):
+        raise SystemExit("Passwords don't match.")
+    config_tool.set_password(pw)
+    print("Password saved to %s. A running service picks it up for new logins right away." % config_tool.AUTH_FILE)
+
+
 def main():
+    if "--set-password" in sys.argv:
+        set_config_password()
+        return
+    config_tool.init(load_devices)
     init_state()
     threading.Thread(target=config_refresh_loop, daemon=True).start()
     threading.Thread(target=health_poll_loop, daemon=True).start()

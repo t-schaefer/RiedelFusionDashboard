@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device Config - PLS Fusion Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #dde1e8;
+    --accent: #2563eb; --accent-soft: #e6eefe; --ok: #15803d; --ok-soft: #e3f4e8;
+    --warn: #b45309; --warn-soft: #fdf1dc; --bad: #b91c1c; --bad-soft: #fde6e6; --chip: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13161c; --panel: #1b1f27; --text: #e4e7ee; --muted: #8d95a8; --line: #2c323e;
+      --accent: #6d9bff; --accent-soft: #1f2b45; --ok: #4ade80; --ok-soft: #173322;
+      --warn: #fbbf24; --warn-soft: #3a2d12; --bad: #f87171; --bad-soft: #3d1a1a; --chip: #262b35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .status { color: var(--muted); margin-left: auto; }
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 12px; padding: 12px; height: calc(100vh - 46px); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; }
+  .panel > .head { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .panel > .body { padding: 10px 12px; overflow: auto; flex: 1; min-height: 0; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { background: var(--chip); border: 1px solid var(--line); border-radius: 5px; padding: 4px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=text], input:not([type]), select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+  input.cell { width: 100%; min-width: 90px; }
+  input.cell.set { border-color: var(--accent); background: var(--accent-soft); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  tr.sel td { background: var(--accent-soft); }
+  .muted { color: var(--muted); }
+  .small { font-size: 11px; }
+  .chip { display: inline-block; padding: 0 6px; border-radius: 9px; background: var(--chip); font-size: 11px; margin-right: 3px; white-space: nowrap; }
+  .chip.danger { background: var(--bad-soft); color: var(--bad); }
+  .chip.api { background: var(--warn-soft); color: var(--warn); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); }
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { border-radius: 5px 5px 0 0; border-bottom: none; }
+  .tabs button.active { background: var(--panel); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  details.group { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
+  details.group > summary { padding: 6px 10px; cursor: pointer; font-weight: 600; }
+  #batchGroups { column-width: 540px; column-gap: 8px; }
+  #batchGroups details.group { break-inside: avoid; display: inline-block; width: 100%; margin: 0 0 8px; }
+  #batchGroups summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #batchGroups summary .gname { margin-right: auto; }
+  #batchGroups summary button { font-weight: normal; padding: 1px 8px; font-size: 12px; }
+  #batchGroups td { padding: 2px 6px; }
+  #batchGroups tr.off td:nth-child(2) { color: var(--muted); }
+  .count { font-weight: normal; }
+  .toolbar { position: sticky; top: -10px; background: var(--panel); padding: 6px 0; z-index: 3; }
+  @media (max-width: 700px) { #batchGroups { column-width: auto; column-count: 1; } }
+  details.group > div { padding: 0 10px 8px; }
+  .grid-wrap { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 6px; }
+  .grid-wrap th:first-child, .grid-wrap td:first-child { position: sticky; left: 0; background: var(--panel); z-index: 2; white-space: nowrap; }
+  .note { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .hidden { display: none !important; }
+  pre { background: var(--bg); padding: 6px; border-radius: 4px; overflow: auto; max-height: 200px; margin: 4px 0; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; max-width: 560px; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; height: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Device Config</h1>
+  <span class="muted small">Batch configuration for emsfp devices, with optional per-device and per-I/O overrides</span>
+  <span class="status" id="status"></span>
+  <a href="/" style="margin-left:auto"><button>&larr; Dashboard</button></a>
+  <a href="/config/logout" id="logout" class="hidden"><button>Log out</button></a>
+</header>
+
+<div class="layout">
+  <!-- ------------------------------------------------------------ devices -->
+  <section class="panel">
+    <div class="head">
+      <strong>Devices</strong> <span class="muted small" title="Add or remove devices in the dashboard">(from the dashboard)</span>
+      <button id="btnRead" class="primary" title="Read the full configuration of the selected devices (read-only)">Read selected</button>
+      <button id="btnAddShow" style="display:none">Add…</button>
+      <button id="btnImport" style="display:none" title="Import the device list of the Fusion dashboard">Import dashboard list</button>
+      <button id="btnRemove" style="display:none">Remove</button>
+    </div>
+    <div class="head hidden" id="addBox">
+      <textarea id="addText" rows="3" style="width:100%" placeholder="One per line: ip[,name[,tag]]  e.g. 10.101.12.162,OC.IP/HI A.1,MuoN"></textarea>
+      <button id="btnAdd" class="primary">Add</button>
+    </div>
+    <div class="head">
+      <input id="devFilter" placeholder="Filter (name, ip, type, tag)…" style="flex:1">
+      <label class="small"><input type="checkbox" id="selAll"> all visible</label>
+    </div>
+    <div class="body" style="padding:0">
+      <table id="devTable"><thead><tr><th></th><th>Device</th><th>Type / FW</th><th>Read</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ main -->
+  <section class="panel">
+    <div class="head">
+      <div class="tabs" id="tabs">
+        <button data-tab="batch" class="active">1 · Batch profile</button>
+        <button data-tab="io">2 · Per I/O</button>
+        <button data-tab="device">3 · Per device</button>
+        <button data-tab="apply">4 · Preview &amp; apply</button>
+      </div>
+      <span style="margin-left:auto"></span>
+      <select id="profileSel" title="Selecting a profile loads it"><option value="">— profile —</option></select>
+      <span id="dirty" class="chip warn hidden">unsaved</span>
+      <button id="btnSave" class="primary" title="Save changes to the selected profile">Save</button>
+      <button id="btnSaveProfile">Save as…</button>
+      <button id="btnDelProfile">Delete</button>
+      <button id="btnCapture" title="Fill the batch profile from a device's current values">Capture from device…</button>
+      <button id="btnClear">Clear profile</button>
+    </div>
+
+    <div class="body" id="tab-batch">
+      <div class="note small">
+        Tick a setting to include it. It is applied to every selected device and, for I/O settings, to every
+        I/O of that type. Settings a device doesn't have are skipped for that device ("unsupported").
+        <span class="chip danger">danger</span> can take a device or signal off air.
+        <span class="chip api">unverified</span> write shape derived from the API; try it on a test card first.
+        <span class="chip ok">verified</span> written and read back on the MuoN test card.
+      </div>
+      <div class="row toolbar">
+        <input id="batchSearch" placeholder="Search settings…" style="flex:1;min-width:180px">
+        <label class="small"><input type="checkbox" id="onlyActive"> only active</label>
+        <button id="btnExpand">Expand all</button>
+        <button id="btnCollapse">Collapse all</button>
+      </div>
+      <div id="batchGroups"></div>
+    </div>
+
+    <div class="body hidden" id="tab-io">
+      <div class="row">
+        <label>I/O type <select id="ioScope"></select></label>
+        <span class="muted small">Values here override the batch profile for one I/O, on every selected device that has an I/O of that name. Empty = inherit.</span>
+      </div>
+      <div id="ioGrid"></div>
+    </div>
+
+    <div class="body hidden" id="tab-device">
+      <div class="row">
+        <label>Device <select id="devSel"></select></label>
+        <button id="btnClearDev">Clear overrides for this device</button>
+        <select id="backupSel"><option value="">— backup —</option></select>
+        <button id="btnLoadBackup" title="Load a backup's values as overrides for its device (restore)">Load backup as overrides</button>
+      </div>
+      <details class="group">
+        <summary>Import flow addresses from CSV (any number of devices)</summary>
+        <div>
+          <p class="small muted">Columns: <code>ip,flow,src_ip,src_port,dst_ip,dst_port,igmp_src,enable</code>. Flow = flow name as shown on the device
+            (e.g. <code>rx ch1 flow 0 pri</code>). Empty cells are left unchanged. A header line is ignored.</p>
+          <textarea id="csvText" rows="5" style="width:100%"></textarea>
+          <button id="btnCsv">Import into device overrides</button> <span id="csvResult" class="small"></span>
+        </div>
+      </details>
+      <div id="deviceView"></div>
+    </div>
+
+    <div class="body hidden" id="tab-apply">
+      <div class="note small hidden" id="groupFilter"></div>
+      <div class="row">
+        <button id="btnPlan" class="primary">Build preview for selected devices</button>
+        <label class="small"><input type="checkbox" id="showUnchanged"> show unchanged / n/a</label>
+        <label class="small"><input type="checkbox" id="showBodies"> show POST bodies</label>
+        <span style="margin-left:auto"></span>
+        <button id="btnApply" class="danger" disabled>Apply…</button>
+      </div>
+      <div id="planView" class="muted">Read devices, set up the profile, then build the preview. Nothing is written until you apply.</div>
+    </div>
+  </section>
+</div>
+
+<dialog id="applyDlg">
+  <h3 style="margin-top:0">Apply configuration</h3>
+  <p id="applyText"></p>
+  <p class="small muted">Each device gets a fresh read, a backup and one write per section. Every changed field is then read back and checked.</p>
+  <p>Type <strong>APPLY</strong> to confirm: <input id="applyConfirm" autocomplete="off"></p>
+  <div class="row"><button id="applyGo" class="danger">Apply now</button><button id="applyCancel">Cancel</button></div>
+</dialog>
+
+<dialog id="captureDlg">
+  <h3 style="margin-top:0">Capture profile from device</h3>
+  <p class="small">Fills the batch profile with the device's current values (batchable settings only). Settings marked danger are left out.</p>
+  <p><select id="captureSel"></select></p>
+  <label class="small"><input type="checkbox" id="captureMerge" checked> merge into current profile (otherwise replace)</label>
+  <div class="row" style="margin-top:10px"><button id="captureGo" class="primary">Capture</button><button id="captureCancel">Cancel</button></div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = v => v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+
+let CATALOG = [], SCOPES = {}, BY_ID = {};
+let devices = [], reads = {};
+let selected = new Set();
+let profile = { values: {}, io: {} };   // batch profile
+let overrides = {};                      // ip -> {values, io}
+let lastPlan = null;
+let planGroups = null;                   // set by "Apply only this" on a category
+let currentProfile = "", dirty = false;
+
+function load(key, dflt) { try { return JSON.parse(localStorage.getItem(key)) ?? dflt; } catch { return dflt; } }
+function persist() {
+  try {
+    localStorage.setItem("muon.profile", JSON.stringify(profile));
+    localStorage.setItem("muon.overrides", JSON.stringify(overrides));
+    localStorage.setItem("muon.selected", JSON.stringify([...selected]));
+  } catch {}
+}
+function status(msg) { $("#status").textContent = msg; }
+
+async function api(path, body) {
+  path = path.replace(/^\/api\//, "/api/config/");   // served by the dashboard service
+  const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 401) { location.href = "/config/login"; throw new Error("login required"); }
+  const data = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
+  if (!res.ok || data.ok === false) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+// ------------------------------------------------------------------ devices
+async function refreshDevices() {
+  const d = await api("/api/devices");
+  devices = d.devices; reads = d.reads;
+  renderDevices(); renderDeviceSelects();
+}
+
+function devLabel(ip) {
+  const d = devices.find(x => x.ip === ip) || {};
+  const r = reads[ip];
+  return (d.name || r?.summary?.hostname || ip) + " (" + ip + ")";
+}
+
+function renderDevices() {
+  const f = $("#devFilter").value.trim().toLowerCase();
+  const tb = $("#devTable tbody");
+  tb.innerHTML = "";
+  for (const d of devices) {
+    const r = reads[d.ip];
+    const hay = [d.ip, d.name, d.tag, r?.summary?.hostname, r?.summary?.type, r?.summary?.baseType].join(" ").toLowerCase();
+    if (f && !hay.includes(f)) continue;
+    const tr = document.createElement("tr");
+    if (selected.has(d.ip)) tr.className = "sel";
+    tr.dataset.ip = d.ip;
+    tr.innerHTML = `<td><input type="checkbox" ${selected.has(d.ip) ? "checked" : ""}></td>
+      <td><div>${esc(d.name || r?.summary?.hostname || "")}</div><div class="muted small">${esc(d.ip)} ${d.tag ? `<span class="chip">${esc(d.tag)}</span>` : ""}</div></td>
+      <td class="small">${r ? esc(r.summary.baseType || "") + "<br><span class='muted'>" + esc(r.summary.firmware || "") + "</span>" : ""}</td>
+      <td class="small">${r ? `<span class="chip ${r.network === "red" ? "ok" : "warn"}">${esc(r.network)}</span><br><span class="muted">${esc(r.readAt.slice(11))}</span>` : `<span class="muted">—</span>`}</td>`;
+    tr.querySelector("input").addEventListener("change", e => {
+      e.target.checked ? selected.add(d.ip) : selected.delete(d.ip);
+      tr.classList.toggle("sel", e.target.checked);
+      persist(); renderBatch();
+    });
+    tb.appendChild(tr);
+  }
+}
+
+function renderDeviceSelects() {
+  const read = devices.filter(d => reads[d.ip]);
+  const opts = read.map(d => `<option value="${esc(d.ip)}">${esc(devLabel(d.ip))}</option>`).join("");
+  const keep = $("#devSel").value;
+  $("#devSel").innerHTML = opts || `<option value="">(read a device first)</option>`;
+  if (keep && reads[keep]) $("#devSel").value = keep;
+  $("#captureSel").innerHTML = opts;
+}
+
+$("#devFilter").addEventListener("input", renderDevices);
+$("#selAll").addEventListener("change", e => {
+  $$("#devTable tbody tr").forEach(tr => e.target.checked ? selected.add(tr.dataset.ip) : selected.delete(tr.dataset.ip));
+  persist(); renderDevices(); renderBatch();
+});
+$("#btnAddShow").onclick = () => $("#addBox").classList.toggle("hidden");
+$("#btnAdd").onclick = async () => {
+  const list = $("#addText").value.split(/\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const [ip, name, tag] = l.split(/[,;\t]/).map(s => (s || "").trim());
+    return { ip, name, tag };
+  });
+  const r = await api("/api/devices/add", { devices: list });
+  status(`${r.added} device(s) added`); $("#addText").value = ""; refreshDevices();
+};
+$("#btnImport").onclick = async () => {
+  try { const r = await api("/api/devices/import-dashboard", {}); status(`${r.added} device(s) imported from the dashboard`); refreshDevices(); }
+  catch (e) { alert(e.message); }
+};
+$("#btnRemove").onclick = async () => {
+  if (!selected.size || !confirm(`Remove ${selected.size} device(s) from the list? (Nothing is changed on the devices.)`)) return;
+  await api("/api/devices/remove", { ips: [...selected] });
+  selected.clear(); persist(); refreshDevices();
+};
+$("#btnRead").onclick = async () => {
+  if (!selected.size) return alert("Select devices first.");
+  status(`reading ${selected.size} device(s)…`); $("#btnRead").disabled = true;
+  try {
+    const r = await api("/api/read", { ips: [...selected] });
+    const failed = Object.entries(r.results).filter(([, v]) => !v.ok);
+    status(`read ${selected.size - failed.length}/${selected.size}` + (failed.length ? ` — failed: ${failed.map(([ip, v]) => ip + " (" + v.error + ")").join(", ")}` : ""));
+    await refreshDevices(); renderAll();
+  } catch (e) { status("read failed: " + e.message); }
+  $("#btnRead").disabled = false;
+};
+
+// ------------------------------------------------------------------ helpers
+function selectedReads() { return [...selected].map(ip => reads[ip]).filter(Boolean); }
+
+function currentOf(r, s, inst) {
+  if (!r) return undefined;
+  if (s.scope === "device") return r.current.values[s.id];
+  return r.current.io?.[s.scope]?.[inst]?.[s.id];
+}
+
+// summary of current values across selected devices for a batch setting
+function summarize(s) {
+  const counts = new Map(); let unsupported = 0, total = 0;
+  for (const r of selectedReads()) {
+    total++;
+    const vals = s.scope === "device" ? [currentOf(r, s)] : (r.instances[s.scope] || []).map(k => currentOf(r, s, k));
+    const present = vals.filter(v => v !== undefined);
+    if (!present.length) { unsupported++; continue; }
+    for (const v of present) counts.set(fmt(v), (counts.get(fmt(v)) || 0) + 1);
+  }
+  if (!total) return "";
+  const parts = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([v, n]) => `<span class="chip">${esc(v === "" ? "∅" : v)} ×${n}</span>`);
+  if (counts.size > 3) parts.push(`<span class="chip">+${counts.size - 3}</span>`);
+  if (unsupported) parts.push(`<span class="chip warn">n/a on ${unsupported}</span>`);
+  return parts.join("");
+}
+
+function badges(s) {
+  return (s.danger ? `<span class="chip danger">danger</span>` : "") +
+    (s.evidence === "api" ? `<span class="chip api">unverified</span>` : s.evidence === "verified" ? `<span class="chip ok">verified</span>` : "");
+}
+
+function editor(s, value, placeholder, onChange) {
+  const listId = s.options ? "opts-" + s.id.replace(/\W/g, "_") : "";
+  let el;
+  if (s.type === "bool" || s.type === "bool01") {
+    el = document.createElement("select");
+    el.innerHTML = `<option value="">${esc(placeholder === undefined ? "" : "(" + fmt(placeholder) + ")")}</option><option value="true">on</option><option value="false">off</option>`;
+    const v = value === undefined || value === null || value === "" ? "" : (value === true || value === "1" || value === "true") ? "true" : "false";
+    el.value = v;
+    el.onchange = () => onChange(el.value === "" ? undefined : el.value === "true");
+  } else {
+    el = document.createElement("input");
+    el.value = value === undefined || value === null ? "" : fmt(value);
+    el.placeholder = placeholder === undefined ? "" : fmt(placeholder);
+    if (listId) el.setAttribute("list", listId);
+    el.onchange = () => {
+      let v = el.value;
+      if (v === "") v = undefined;
+      else if (s.type === "int" && /^-?\d+$/.test(v)) v = Number(v);
+      onChange(v);
+    };
+  }
+  el.classList.add("cell");
+  if (value !== undefined && value !== null && value !== "") el.classList.add("set");
+  if (s.help) el.title = s.help;
+  return el;
+}
+
+function datalists() {
+  let html = "";
+  for (const s of CATALOG) if (s.options) html += `<datalist id="opts-${s.id.replace(/\W/g, "_")}">${s.options.map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
+  const div = document.createElement("div"); div.innerHTML = html; document.body.appendChild(div);
+}
+
+// ------------------------------------------------------------------ tab 1: batch
+function renderBatch() {
+  const wrap = $("#batchGroups");
+  const openGroups = new Set(load("muon.open", null) ?? [...new Set(CATALOG.map(s => s.group))]);
+  wrap.innerHTML = "";
+  const groups = new Map();
+  for (const s of CATALOG) if (s.batch) { if (!groups.has(s.group)) groups.set(s.group, []); groups.get(s.group).push(s); }
+  for (const [g, list] of groups) {
+    const det = document.createElement("details");
+    det.className = "group"; det.dataset.g = g;
+    det.open = openGroups.has(g);
+    det.addEventListener("toggle", saveOpenState);
+    const scopeName = list[0].scope !== "device" ? `<span class="chip">per ${esc(SCOPES[list[0].scope] || list[0].scope)}</span>` : "";
+    det.innerHTML = `<summary><span class="gname">${esc(g)} ${scopeName} <span class="count"></span></span>
+        <button class="b-on" title="Switch on every setting in this category (starting from the devices' current values)">All on</button>
+        <button class="b-off" title="Switch off every setting in this category">All off</button>
+        <button class="b-apply" title="Preview &amp; apply only this category to the selected devices">Apply only this →</button></summary>
+      <div><table><thead><tr><th style="width:24px"></th><th>Setting</th><th style="width:200px">Value</th><th>Current on selected devices</th></tr></thead><tbody></tbody></table></div>`;
+    const tb = $("tbody", det);
+    for (const s of list) {
+      const tr = document.createElement("tr");
+      const inc = s.id in profile.values;
+      tr.innerHTML = `<td><input type="checkbox" ${inc ? "checked" : ""}></td><td>${esc(s.label)} ${badges(s)}</td><td></td><td class="small">${summarize(s)}</td>`;
+      const cb = $("input", tr);
+      tr.classList.toggle("off", !inc);
+      const ed = editor(s, profile.values[s.id], undefined, v => {
+        if (v === undefined) delete profile.values[s.id]; else profile.values[s.id] = v;
+        cb.checked = v !== undefined; tr.classList.toggle("off", !cb.checked);
+        profileChanged(); renderBatchCounts();
+      });
+      tr.children[2].appendChild(ed);
+      cb.onchange = () => {
+        if (!cb.checked) { delete profile.values[s.id]; ed.value = ""; ed.classList.remove("set"); }
+        else {
+          const first = defaultFor(s);
+          if (first === undefined) { cb.checked = false; return alert("Enter a value first (no read device has this setting)."); }
+          profile.values[s.id] = first; ed.value = fmt(first); ed.classList.add("set");
+          if (ed.tagName === "SELECT") ed.value = (first === true || first === "1" || first === "true") ? "true" : "false";
+        }
+        tr.classList.toggle("off", !cb.checked);
+        profileChanged(); renderBatchCounts();
+      };
+      tr.dataset.search = (s.label + " " + s.id + " " + g).toLowerCase();
+      tb.appendChild(tr);
+    }
+    wireGroupButtons(det, g, list);
+    wrap.appendChild(det);
+  }
+  applyBatchFilter();
+  renderBatchCounts();
+}
+
+// value to start from when a setting is switched on: the first read device's current value
+function defaultFor(s) {
+  const pool = [...selectedReads(), ...Object.values(reads)];
+  for (const r of pool) {
+    const v = s.scope === "device" ? currentOf(r, s) : (r.instances[s.scope] || []).map(k => currentOf(r, s, k)).find(x => x !== undefined);
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
+function wireGroupButtons(det, g, list) {
+  const stop = fn => e => { e.preventDefault(); e.stopPropagation(); fn(); };
+  $(".b-on", det).onclick = stop(() => {
+    let missing = 0;
+    for (const s of list) {
+      if (s.id in profile.values) continue;
+      const v = defaultFor(s);
+      if (v === undefined) missing++; else profile.values[s.id] = v;
+    }
+    det.open = true; profileChanged(); renderBatch();
+    if (missing) status(`${g}: ${missing} setting(s) left off - no read device has them`);
+  });
+  $(".b-off", det).onclick = stop(() => {
+    list.forEach(s => delete profile.values[s.id]);
+    profileChanged(); renderBatch();
+  });
+  $(".b-apply", det).onclick = stop(() => {
+    if (!list.some(s => s.id in profile.values)) return alert(`Nothing is switched on in "${g}".`);
+    planGroups = [g];
+    showTab("apply");
+    $("#btnPlan").click();
+  });
+}
+
+function applyBatchFilter() {
+  const q = $("#batchSearch").value.trim().toLowerCase();
+  const onlyActive = $("#onlyActive").checked;
+  $$("#batchGroups details.group").forEach(det => {
+    let visible = 0;
+    $$("tbody tr", det).forEach(tr => {
+      const show = (!q || tr.dataset.search.includes(q)) && (!onlyActive || !tr.classList.contains("off"));
+      tr.classList.toggle("hidden", !show);
+      if (show) visible++;
+    });
+    det.classList.toggle("hidden", visible === 0);
+    if (q && visible) det.open = true;
+  });
+}
+
+function renderBatchCounts() {
+  $$("#batchGroups details.group").forEach(det => {
+    const all = CATALOG.filter(s => s.batch && s.group === det.dataset.g);
+    const n = all.filter(s => s.id in profile.values).length;
+    $(".count", det).innerHTML = `<span class="chip ${n ? "ok" : ""}">${n}/${all.length} on</span>`;
+  });
+}
+
+function saveOpenState() {
+  try { localStorage.setItem("muon.open", JSON.stringify($$("#batchGroups details.group[open]").map(d => d.dataset.g))); } catch {}
+}
+
+$("#batchSearch").addEventListener("input", applyBatchFilter);
+$("#onlyActive").addEventListener("change", applyBatchFilter);
+$("#btnExpand").onclick = () => { $$("#batchGroups details.group").forEach(d => d.open = true); saveOpenState(); };
+$("#btnCollapse").onclick = () => { $$("#batchGroups details.group").forEach(d => d.open = false); saveOpenState(); };
+
+// ------------------------------------------------------------------ tab 2: per I/O
+function renderIo() {
+  const scope = $("#ioScope").value;
+  const settings = CATALOG.filter(s => s.scope === scope && s.batch);
+  const keys = new Set();
+  for (const r of selectedReads()) (r.instances[scope] || []).forEach(k => keys.add(k));
+  Object.keys(profile.io[scope] || {}).forEach(k => keys.add(k));
+  const sorted = [...keys].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (!sorted.length) { $("#ioGrid").innerHTML = `<p class="muted">No ${esc(SCOPES[scope])} on the selected (read) devices.</p>`; return; }
+  const wrap = document.createElement("div"); wrap.className = "grid-wrap";
+  const t = document.createElement("table");
+  t.innerHTML = `<thead><tr><th>${esc(SCOPES[scope])}</th>${settings.map(s => `<th title="${esc(s.help || "")}">${esc(s.label)} ${badges(s)}</th>`).join("")}</tr></thead><tbody></tbody>`;
+  for (const k of sorted) {
+    const tr = document.createElement("tr");
+    const have = selectedReads().filter(r => (r.instances[scope] || []).includes(k)).length;
+    tr.innerHTML = `<td>${esc(k)} <span class="muted small">(${have} dev)</span></td>`;
+    for (const s of settings) {
+      const td = document.createElement("td");
+      const v = profile.io[scope]?.[k]?.[s.id];
+      td.appendChild(editor(s, v, profile.values[s.id], nv => {
+        profile.io[scope] ??= {}; profile.io[scope][k] ??= {};
+        if (nv === undefined) delete profile.io[scope][k][s.id]; else profile.io[scope][k][s.id] = nv;
+        if (!Object.keys(profile.io[scope][k]).length) delete profile.io[scope][k];
+        profileChanged(); renderIo();
+      }));
+      tr.appendChild(td);
+    }
+    $("tbody", t).appendChild(tr);
+  }
+  wrap.appendChild(t);
+  $("#ioGrid").innerHTML = ""; $("#ioGrid").appendChild(wrap);
+}
+$("#ioScope").addEventListener("change", renderIo);
+
+// ------------------------------------------------------------------ tab 3: per device
+function renderDevice() {
+  const ip = $("#devSel").value;
+  const r = reads[ip];
+  const view = $("#deviceView");
+  if (!r) { view.innerHTML = `<p class="muted">Read a device first.</p>`; return; }
+  const ov = overrides[ip] ??= { values: {}, io: {} };
+  view.innerHTML = `<p class="small muted">${esc(r.summary.type || "")} · ${esc(r.summary.baseType || "")} · S/N ${esc(r.summary.serial || "")} · FW ${esc(r.summary.firmware || "")} · via ${esc(r.network)} · read ${esc(r.readAt)}</p>
+    <p class="small muted">Placeholder = what will be applied from the profile (or the device's current value). A value here wins over the profile for this device only.</p>`;
+  // device-scope settings
+  const groups = new Map();
+  for (const s of CATALOG) if (s.scope === "device" && r.current.values[s.id] !== undefined) { if (!groups.has(s.group)) groups.set(s.group, []); groups.get(s.group).push(s); }
+  for (const [g, list] of groups) {
+    const det = document.createElement("details"); det.className = "group";
+    const n = list.filter(s => s.id in ov.values).length;
+    det.innerHTML = `<summary>${esc(g)} <span class="muted small">${n ? n + " overridden" : ""}</span></summary><div><table><thead><tr><th>Setting</th><th>Current</th><th style="width:240px">Override</th></tr></thead><tbody></tbody></table></div>`;
+    if (n) det.open = true;
+    for (const s of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(s.label)} ${badges(s)}</td><td class="small">${esc(fmt(r.current.values[s.id]))}</td><td></td>`;
+      const inherited = s.id in profile.values ? profile.values[s.id] : r.current.values[s.id];
+      tr.children[2].appendChild(editor(s, ov.values[s.id], inherited, v => {
+        if (v === undefined) delete ov.values[s.id]; else ov.values[s.id] = v; persist();
+      }));
+      $("tbody", det).appendChild(tr);
+    }
+    view.appendChild(det);
+  }
+  // I/O scopes: all settings (incl. per-device-only ones like addresses)
+  for (const scope of Object.keys(SCOPES)) {
+    const keys = r.instances[scope] || [];
+    if (!keys.length) continue;
+    const settings = CATALOG.filter(s => s.scope === scope && keys.some(k => currentOf(r, s, k) !== undefined));
+    const det = document.createElement("details"); det.className = "group";
+    const n = Object.keys(ov.io[scope] || {}).length;
+    det.innerHTML = `<summary>${esc(SCOPES[scope])} <span class="muted small">${keys.length} · ${n ? n + " with overrides" : ""}</span></summary><div></div>`;
+    if (n) det.open = true;
+    det.addEventListener("toggle", () => { if (det.open && !$(".grid-wrap", det)) buildIoTable(det.lastElementChild, r, ov, scope, keys, settings); }, { once: false });
+    if (det.open) buildIoTable(det.lastElementChild, r, ov, scope, keys, settings);
+    view.appendChild(det);
+  }
+}
+
+function buildIoTable(host, r, ov, scope, keys, settings) {
+  const wrap = document.createElement("div"); wrap.className = "grid-wrap";
+  const t = document.createElement("table");
+  t.innerHTML = `<thead><tr><th>${esc(SCOPES[scope])}</th>${settings.map(s => `<th title="${esc(s.help || "")}">${esc(s.label)} ${badges(s)}</th>`).join("")}</tr></thead><tbody></tbody>`;
+  for (const k of keys) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${esc(k)}</td>`;
+    for (const s of settings) {
+      const td = document.createElement("td");
+      const cur = currentOf(r, s, k);
+      if (cur === undefined) { td.innerHTML = `<span class="muted small">n/a</span>`; tr.appendChild(td); continue; }
+      const inherited = profile.io[scope]?.[k]?.[s.id] ?? (s.batch ? profile.values[s.id] : undefined) ?? cur;
+      td.appendChild(editor(s, ov.io[scope]?.[k]?.[s.id], inherited, v => {
+        ov.io[scope] ??= {}; ov.io[scope][k] ??= {};
+        if (v === undefined) delete ov.io[scope][k][s.id]; else ov.io[scope][k][s.id] = v;
+        if (!Object.keys(ov.io[scope][k]).length) delete ov.io[scope][k];
+        persist();
+      }));
+      td.title = "current: " + fmt(cur);
+      tr.appendChild(td);
+    }
+    $("tbody", t).appendChild(tr);
+  }
+  wrap.appendChild(t); host.innerHTML = ""; host.appendChild(wrap);
+}
+
+$("#devSel").addEventListener("change", renderDevice);
+$("#btnClearDev").onclick = () => {
+  const ip = $("#devSel").value; if (!ip) return;
+  if (!confirm("Clear all overrides for " + devLabel(ip) + "?")) return;
+  delete overrides[ip]; persist(); renderDevice();
+};
+$("#btnLoadBackup").onclick = async () => {
+  const name = $("#backupSel").value; if (!name) return;
+  const r = await api("/api/backups/load", { name });
+  if (!confirm(`Load all values from ${name} as overrides for ${r.ip}? Apply afterwards to restore that state.`)) return;
+  overrides[r.ip] = r.profile; persist();
+  if (reads[r.ip]) { $("#devSel").value = r.ip; renderDevice(); }
+  status("backup loaded as overrides for " + r.ip + " — read the device, then preview & apply");
+};
+async function refreshBackups() {
+  const b = await api("/api/backups");
+  $("#backupSel").innerHTML = `<option value="">— backup —</option>` + b.backups.map(n => `<option>${esc(n)}</option>`).join("");
+}
+
+$("#btnCsv").onclick = () => {
+  const cols = ["src_ip_addr", "src_udp_port", "dst_ip_addr", "dst_udp_port", "igmp_src_ip", "enable"];
+  let n = 0, bad = [];
+  for (const [i, line] of $("#csvText").value.split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    const c = line.split(/[,;\t]/).map(s => s.trim());
+    if (i === 0 && /^ip$/i.test(c[0])) continue;
+    const [ip, flow, ...vals] = c;
+    if (!ip || !flow) { bad.push(i + 1); continue; }
+    const ov = overrides[ip] ??= { values: {}, io: {} };
+    ov.io.flow ??= {}; ov.io.flow[flow] ??= {};
+    cols.forEach((col, j) => { if (vals[j] !== undefined && vals[j] !== "") ov.io.flow[flow]["flow." + col] = vals[j]; });
+    n++;
+  }
+  persist();
+  $("#csvResult").textContent = `${n} row(s) imported` + (bad.length ? `, skipped lines ${bad.join(", ")}` : "");
+  renderDevice();
+};
+
+// ------------------------------------------------------------------ tab 4: preview & apply
+function relevantOverrides() {
+  const o = {}; for (const ip of selected) if (overrides[ip]) o[ip] = overrides[ip]; return o;
+}
+
+function renderGroupFilter() {
+  const box = $("#groupFilter");
+  box.classList.toggle("hidden", !planGroups);
+  if (!planGroups) return;
+  box.innerHTML = `Only category <strong>${esc(planGroups.join(", "))}</strong> is previewed and applied. <button id="btnAllGroups">Show all categories</button>`;
+  $("#btnAllGroups").onclick = () => { planGroups = null; lastPlan = null; renderGroupFilter(); $("#btnPlan").click(); };
+}
+
+$("#btnPlan").onclick = async () => {
+  renderGroupFilter();
+  if (!selected.size) return alert("Select devices first.");
+  const unread = [...selected].filter(ip => !reads[ip]);
+  if (unread.length) return alert("Read these devices first: " + unread.join(", "));
+  status("building preview…");
+  const r = await api("/api/plan", { ips: [...selected], profile, overrides: relevantOverrides(), groups: planGroups });
+  lastPlan = r.plan; renderPlan(); status("preview ready");
+};
+$("#showUnchanged").onchange = () => lastPlan && renderPlan();
+$("#showBodies").onchange = () => lastPlan && renderPlan();
+
+function statusChip(st) {
+  return { change: `<span class="chip warn">change</span>`, unchanged: `<span class="chip">same</span>`,
+           unsupported: `<span class="chip">n/a</span>`, invalid: `<span class="chip bad">invalid</span>` }[st] || esc(st);
+}
+
+function renderPlan(results) {
+  const showSame = $("#showUnchanged").checked, showBodies = $("#showBodies").checked;
+  let html = "", totalChanges = 0, dangerChanges = 0, invalid = 0;
+  for (const [ip, p] of Object.entries(lastPlan)) {
+    const res = results?.[ip];
+    const rows = (res?.rows) || p.rows || [];
+    if (p.error || res?.error) { html += `<h4>${esc(devLabel(ip))}</h4><p class="chip bad">${esc(p.error || res.error)}</p>`; continue; }
+    const c = { change: 0, unchanged: 0, unsupported: 0, invalid: 0 };
+    rows.forEach(x => c[x.status]++);
+    totalChanges += c.change; invalid += c.invalid;
+    dangerChanges += rows.filter(x => x.status === "change" && x.danger).length;
+    let verify = "";
+    if (res) {
+      const ok = rows.filter(x => x.verify === "ok").length, mis = rows.filter(x => x.verify && x.verify !== "ok").length;
+      const postFail = (res.posts || []).filter(x => !x.ok).length;
+      verify = ` — <span class="chip ${mis || postFail ? "bad" : "ok"}">${ok}/${c.change} verified</span>` + (postFail ? `<span class="chip bad">${postFail} POST failed</span>` : "") +
+        (res.rebooted ? `<span class="chip warn">device rebooted</span>` : res.unreachable ? `<span class="chip warn">was briefly unreachable</span>` : "") +
+        (res.backup ? ` <span class="muted small">backup ${esc(res.backup)}</span>` : "");
+    }
+    html += `<details class="group" ${c.change || c.invalid || res ? "open" : ""}><summary>${esc(devLabel(ip))} — ${c.change} change(s), ${c.unsupported} n/a, ${c.invalid} invalid${verify}</summary><div>`;
+    const shown = rows.filter(x => showSame || x.status === "change" || x.status === "invalid");
+    if (shown.length) {
+      html += `<table><thead><tr><th>Status</th><th>Section</th><th>I/O</th><th>Setting</th><th>Current</th><th>New</th>${res ? "<th>Read back</th>" : ""}</tr></thead><tbody>`;
+      for (const x of shown) {
+        const v = x.verify ? (x.verify === "ok" ? `<span class="chip ok">ok</span>` : `<span class="chip bad">${esc(x.verify)}</span> ${esc(fmt(x.readback))}`) : "";
+        html += `<tr><td>${statusChip(x.status)}</td><td class="small">${esc(x.group)}</td><td class="small">${esc(x.instance || "")}</td>
+          <td>${esc(x.label)} ${x.danger ? `<span class="chip danger">danger</span>` : ""}${x.evidence === "api" ? `<span class="chip api">unverified</span>` : ""}</td>
+          <td class="small">${esc(fmt(x.current))}</td><td class="small"><strong>${esc(fmt(x.desired))}</strong>${x.error ? `<br><span class="chip bad">${esc(x.error)}</span>` : ""}</td>${res ? `<td class="small">${v}</td>` : ""}</tr>`;
+      }
+      html += `</tbody></table>`;
+    } else html += `<p class="muted small">Nothing to change.</p>`;
+    const posts = res?.posts || p.posts || [];
+    if (showBodies && posts.length) html += posts.map(x => `<div class="small"><strong>POST</strong> ${esc(x.path)} ${x.status !== undefined ? `→ ${esc(x.status)} ${esc(x.response || "")}` : ""}<pre>${esc(JSON.stringify(x.body, null, 1))}</pre></div>`).join("");
+    html += `</div></details>`;
+  }
+  $("#planView").classList.remove("muted");
+  $("#planView").innerHTML = html || "Nothing selected.";
+  $("#btnApply").disabled = !!results || totalChanges === 0;
+  $("#btnApply").dataset.summary = `${totalChanges} change(s) on ${Object.keys(lastPlan).length} device(s)` +
+    (dangerChanges ? `, ${dangerChanges} of them marked danger` : "") + (invalid ? `. ${invalid} invalid value(s) will be skipped.` : ".");
+}
+
+$("#btnApply").onclick = () => {
+  $("#applyText").textContent = $("#btnApply").dataset.summary;
+  $("#applyConfirm").value = ""; $("#applyDlg").showModal();
+};
+$("#applyCancel").onclick = () => $("#applyDlg").close();
+$("#applyGo").onclick = async () => {
+  if ($("#applyConfirm").value !== "APPLY") return alert("Type APPLY to confirm.");
+  $("#applyDlg").close();
+  const ips = Object.keys(lastPlan).filter(ip => !lastPlan[ip].error);
+  status(`applying to ${ips.length} device(s)…`); $("#btnApply").disabled = true;
+  try {
+    const r = await api("/api/apply", { ips, profile, overrides: relevantOverrides(), groups: planGroups, confirm: "APPLY" });
+    renderPlan(r.results);
+    status("apply finished — see verification per field");
+    await refreshDevices(); refreshBackups();
+  } catch (e) { status("apply failed: " + e.message); alert(e.message); }
+};
+
+// ------------------------------------------------------------------ profiles
+async function refreshProfiles() {
+  const p = await api("/api/profiles");
+  $("#profileSel").innerHTML = `<option value="">— profile —</option>` + p.profiles.map(n => `<option>${esc(n)}</option>`).join("");
+}
+function setDirty(on) {
+  dirty = on;
+  $("#dirty").classList.toggle("hidden", !on);
+  try { localStorage.setItem("muon.dirty", JSON.stringify(on)); } catch {}
+}
+function profileChanged() { persist(); setDirty(true); }
+
+async function loadProfile(name) {
+  const r = await api("/api/profiles/load", { name });
+  profile = { values: r.profile.values || {}, io: r.profile.io || {} };
+  currentProfile = name; $("#profileSel").value = name;
+  try { localStorage.setItem("muon.profileName", JSON.stringify(name)); } catch {}
+  persist(); setDirty(false); renderAll(); status("profile " + name + " loaded");
+}
+async function saveProfile(name) {
+  await api("/api/profiles/save", { name, profile });
+  await refreshProfiles();
+  currentProfile = name; $("#profileSel").value = name;
+  try { localStorage.setItem("muon.profileName", JSON.stringify(name)); } catch {}
+  setDirty(false); status("saved " + name);
+}
+
+$("#profileSel").onchange = async () => {
+  const name = $("#profileSel").value;
+  if (!name) return;
+  if (dirty && !confirm(`Discard unsaved changes to "${currentProfile || "the profile"}" and load "${name}"?`)) {
+    $("#profileSel").value = currentProfile || ""; return;
+  }
+  await loadProfile(name);
+};
+$("#btnSave").onclick = () => {
+  const name = $("#profileSel").value;
+  if (!name) return $("#btnSaveProfile").click();
+  if (name.endsWith(".example")) return alert("The .example profile is the tracked template - use Save as… (e.g. site-default).");
+  saveProfile(name);
+};
+$("#btnSaveProfile").onclick = async () => {
+  const name = prompt("Profile name:", ($("#profileSel").value || "site-default").replace(/\.example$/, "")); if (!name) return;
+  saveProfile(name);
+};
+$("#btnDelProfile").onclick = async () => {
+  const name = $("#profileSel").value; if (!name || !confirm("Delete profile " + name + "?")) return;
+  await api("/api/profiles/delete", { name }); currentProfile = ""; refreshProfiles();
+};
+$("#btnClear").onclick = () => { if (confirm("Clear the batch profile (incl. per-I/O values)?")) { profile = { values: {}, io: {} }; profileChanged(); renderAll(); } };
+$("#btnCapture").onclick = () => { if (!Object.keys(reads).length) return alert("Read a device first."); $("#captureDlg").showModal(); };
+$("#captureCancel").onclick = () => $("#captureDlg").close();
+$("#captureGo").onclick = async () => {
+  const ip = $("#captureSel").value;
+  const r = await api("/api/capture", { ip, batchOnly: true });
+  const strip = obj => Object.fromEntries(Object.entries(obj).filter(([k]) => !BY_ID[k]?.danger));
+  const vals = strip(r.profile.values);
+  const io = {};
+  for (const [sc, ins] of Object.entries(r.profile.io)) for (const [k, v] of Object.entries(ins)) { const s = strip(v); if (Object.keys(s).length) (io[sc] ??= {})[k] = s; }
+  if ($("#captureMerge").checked) { Object.assign(profile.values, vals); for (const [sc, ins] of Object.entries(io)) profile.io[sc] = { ...(profile.io[sc] || {}), ...ins }; }
+  else profile = { values: vals, io };
+  $("#captureDlg").close(); profileChanged(); renderAll(); status(`captured ${Object.keys(vals).length} value(s) from ${ip}`);
+};
+
+// ------------------------------------------------------------------ tabs / init
+function showTab(tab) {
+  $$("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
+  for (const t of ["batch", "io", "device", "apply"]) $("#tab-" + t).classList.toggle("hidden", t !== tab);
+  renderTab(tab);
+}
+$$("#tabs button").forEach(b => b.onclick = () => {
+  // the "4" tab itself always means: all categories
+  if (b.dataset.tab === "apply" && planGroups) { planGroups = null; lastPlan = null; renderGroupFilter(); }
+  showTab(b.dataset.tab);
+});
+function renderTab(t) { if (t === "batch") renderBatch(); if (t === "io") renderIo(); if (t === "device") renderDevice(); }
+function renderAll() { renderDevices(); renderDeviceSelects(); renderTab($("#tabs button.active").dataset.tab); }
+
+(async function init() {
+  const c = await api("/api/catalog");
+  CATALOG = c.catalog; SCOPES = c.scopes; BY_ID = Object.fromEntries(CATALOG.map(s => [s.id, s]));
+  $("#logout").classList.toggle("hidden", !c.auth);
+  datalists();
+  $("#ioScope").innerHTML = Object.entries(SCOPES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  profile = load("muon.profile", { values: {}, io: {} });
+  overrides = load("muon.overrides", {});
+  selected = new Set(load("muon.selected", []));
+  await Promise.all([refreshDevices(), refreshProfiles(), refreshBackups()]);
+  // Reopen the last profile; on first use start with the editable site default.
+  const names = $$("#profileSel option").map(o => o.value);
+  const last = load("muon.profileName", "");
+  const hasDraft = Object.keys(profile.values || {}).length || Object.keys(profile.io || {}).length;
+  if (last && names.includes(last)) {
+    currentProfile = last; $("#profileSel").value = last;
+    if (!hasDraft) await loadProfile(last); else setDirty(load("muon.dirty", false));
+  } else if (!hasDraft && names.includes("site-default")) {
+    await loadProfile("site-default");
+  }
+  renderAll();
+})().catch(e => status("init failed: " + e.message));
+</script>
+</body>
+</html>

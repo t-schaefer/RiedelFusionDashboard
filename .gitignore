@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 fusion-dashboard-service/devices.json
 fusion-dashboard-service/devices.seeded.json
+fusion-dashboard-service/auth.json
+fusion-dashboard-service/config-backups/
+fusion-dashboard-service/config-profiles/*.json
+!fusion-dashboard-service/config-profiles/*.example.json

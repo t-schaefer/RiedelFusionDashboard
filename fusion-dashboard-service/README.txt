@@ -23,6 +23,8 @@ devices.seeded.json         (auto-created, not in git) remembers which devices.e
                               entries were already offered to devices.json - see "New devices"
 channel-names.json            router button name per device receiver channel (see "Button names")
 build_channel_names.py        regenerates channel-names.json from a Cerebrum destination-table export
+config_tool.py, config_catalog.py, config_ui.html, config-profiles/
+                              the device config page (see "Device config")
 install-task-windows.ps1      one-time setup: registers the Windows Scheduled Task
 uninstall-task-windows.ps1    removes the scheduled task and firewall rule again
 ../update-windows.ps1         (repo root) pulls the latest version from git and restarts the
@@ -143,6 +145,32 @@ blue), matching this fleet's SMPTE 2022-7 style addressing. The dashboard
 outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
+
+Device config (the former MuoN Config Tool) - /config
+-------------------------------------------------------
+Batch configuration of MuoN cards and Fusion gateways, built into this
+dashboard: "Config" button in the header, or http://<this PC>:8090/config.
+It is the old MuoN Config Tool (RiedelMuoNConfig) moved in, so the dashboard
+and the config page are ONE service on port 8090 and share ONE device list
+(add / remove devices in the dashboard; the old "Import dashboard list" is not
+needed any more). The workflow is unchanged: read the selected devices, edit a
+settings profile (batch values, per-I/O and per-device overrides), preview
+the per-device diff, then Apply (you must type APPLY). Before the first write
+a full backup goes to config-backups\, every written field is read back and
+shown as verified / mismatch. Settings are only planned for a device whose
+own API response contains the field. Profiles live in config-profiles\
+(site-default.json is local and seeded once from site-default.example.json).
+Some settings can take a device off air (flagged "danger" in the page) and the
+write shapes flagged "unverified" are not confirmed on a unit yet.
+
+Login: the Config page needs a password; the dashboard itself stays open.
+Set or change it by double-clicking Set-ConfigPassword-FusionDashboard.bat
+(salted PBKDF2 hash in auth.json, not in git; effective at once). One shared
+password, sessions last 12 h, 5 wrong attempts slow down further tries. As
+long as no password is set, /config only answers on the server PC itself.
+Coming from the old tool: copy its config-tool\auth.json to
+fusion-dashboard-service\auth.json to keep the password. The old service
+(task MuoNConfigToolService, port 8091) can then be stopped / uninstalled.
 
 LLDP neighbours
 ----------------
