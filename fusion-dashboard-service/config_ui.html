@@ -68,6 +68,7 @@
   .note { background: var(--warn-soft); color: var(--warn); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .hidden { display: none !important; }
+  input.cell.bad { border-color: #dc3545; background: #fdecea; }
   pre { background: var(--bg); padding: 6px; border-radius: 4px; overflow: auto; max-height: 200px; margin: 4px 0; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; max-width: 560px; }
   dialog::backdrop { background: rgba(0,0,0,.4); }
@@ -541,6 +542,7 @@ function renderDevice() {
   const ov = overrides[ip] ??= { values: {}, io: {} };
   view.innerHTML = `<p class="small muted">${esc(r.summary.type || "")} · ${esc(r.summary.baseType || "")} · S/N ${esc(r.summary.serial || "")} · FW ${esc(r.summary.firmware || "")} · via ${esc(r.network)} · read ${esc(r.readAt)}</p>
     <p class="small muted">Placeholder = what will be applied from the profile (or the device's current value). A value here wins over the profile for this device only.</p>`;
+  buildChannelPanel(view, r, ov);
   // device-scope settings
   const groups = new Map();
   for (const s of CATALOG) if (s.scope === "device" && r.current.values[s.id] !== undefined) { if (!groups.has(s.group)) groups.set(s.group, []); groups.get(s.group).push(s); }
@@ -599,6 +601,86 @@ function buildIoTable(host, r, ov, scope, keys, settings) {
     $("tbody", t).appendChild(tr);
   }
   wrap.appendChild(t); host.innerHTML = ""; host.appendChild(wrap);
+}
+
+// ------------------------------------------------------------------ channel-oriented address entry
+// The generic "Flows" grid below lists every flow with 17 columns. This panel
+// shows the same flows the way they are used: per channel (CH01 RX ...), one
+// row per stream (V01, A01-A04, D01) with the primary and secondary leg side
+// by side - address, port and source. It only writes the per-flow overrides
+// (ov.io.flow[<flow name>]["flow.dst_ip_addr"] ...), so everything after that
+// (preview, backup, apply, read-back) is the normal pipeline.
+function parseFlowName(n) {
+  const m = /^(rx|tx) ch(\d+) flow (\d+) (pri|sec)/i.exec(String(n));
+  return m ? { dir: m[1].toUpperCase(), ch: +m[2], idx: +m[3], leg: m[4].toLowerCase() } : null;
+}
+function streamName(idx) { return idx === 0 ? "V01" : idx >= 1 && idx <= 4 ? "A0" + idx : idx === 5 ? "D01" : "flow " + idx; }
+const isIpv4 = v => /^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v.split(".").every(n => +n <= 255);
+const isMulticastOrZero = v => isIpv4(v) && (v === "0.0.0.0" || (+v.split(".")[0] >= 224 && +v.split(".")[0] <= 239));
+const isPort = v => (typeof v === "number" ? Number.isInteger(v) : /^\d+$/.test(String(v))) && +v >= 0 && +v <= 65535;
+
+function buildChannelPanel(view, r, ov) {
+  const chans = new Map();
+  for (const k of (r.instances.flow || [])) {
+    const p = parseFlowName(k); if (!p) continue;
+    const c = chans.get(p.ch) ?? { dir: p.dir, streams: new Map() }; chans.set(p.ch, c);
+    const st = c.streams.get(p.idx) ?? {}; st[p.leg] = k; c.streams.set(p.idx, st);
+  }
+  if (!chans.size) return;
+  const S = { addr: BY_ID["flow.dst_ip_addr"], port: BY_ID["flow.dst_udp_port"], src: BY_ID["flow.src_ip_addr"], en: BY_ID["flow.enable"] };
+  const setOv = (name, s, v) => {
+    ov.io.flow ??= {}; ov.io.flow[name] ??= {};
+    if (v === undefined) delete ov.io.flow[name][s.id]; else ov.io.flow[name][s.id] = v;
+    if (!Object.keys(ov.io.flow[name]).length) delete ov.io.flow[name];
+    persist();
+  };
+  const edited = names => names.filter(n => Object.keys(ov.io.flow?.[n] || {}).some(id => id !== S.en.id)).length;
+  const det = document.createElement("details"); det.className = "group"; det.open = true;
+  det.innerHTML = `<summary>Channel multicast addresses &amp; ports <span class="muted small">${chans.size} channels - type the values, then use Preview &amp; apply</span></summary><div></div>`;
+  const host = det.lastElementChild;
+  host.innerHTML = `<p class="small muted">Per channel and stream: destination (multicast) address, UDP port and source address of the primary and secondary leg. Empty = leave as is (the grey placeholder is the current value). Address must be multicast (224-239.x.x.x) or 0.0.0.0 = not set.</p>`;
+  for (const [ch, c] of [...chans].sort((a, b) => a[0] - b[0])) {
+    const names = [...c.streams.values()].flatMap(st => [st.pri, st.sec]).filter(Boolean);
+    const cd = document.createElement("details"); cd.className = "group";
+    const label = "CH" + String(ch).padStart(2, "0");
+    const head = () => `${label} ${c.dir} <span class="muted small">${c.streams.size} streams · ${edited(names) ? edited(names) + " flow(s) edited" : "unchanged"}</span>`;
+    cd.innerHTML = `<summary>${head()}</summary><div></div>`;
+    if (edited(names)) cd.open = true;
+    const body = cd.lastElementChild;
+    const cell = (name, s, ok, msg) => {
+      const td = document.createElement("td");
+      const cur = name ? currentOf(r, s, name) : undefined;
+      if (!name || cur === undefined) { td.innerHTML = `<span class="muted small">n/a</span>`; return td; }
+      const el = editor(s, ov.io.flow?.[name]?.[s.id], profile.io.flow?.[name]?.[s.id] ?? cur, v => {
+        if (v !== undefined && !ok(v)) { el.classList.add("bad"); el.title = msg; return; }
+        el.classList.remove("bad"); setOv(name, s, v);
+        cd.firstElementChild.innerHTML = head(); onSwitchChange();
+      });
+      td.appendChild(el); td.title = name + " - current: " + fmt(cur);
+      return td;
+    };
+    const t = document.createElement("table");
+    t.innerHTML = `<thead><tr><th>Stream</th><th colspan="3">Primary: address · port · source</th><th colspan="3">Secondary: address · port · source</th></tr></thead><tbody></tbody>`;
+    for (const [idx, st] of [...c.streams].sort((a, b) => a[0] - b[0])) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(streamName(idx))}</td>`;
+      for (const leg of ["pri", "sec"]) {
+        tr.appendChild(cell(st[leg], S.addr, isMulticastOrZero, "needs a multicast address 224-239.x.x.x (or 0.0.0.0)"));
+        tr.appendChild(cell(st[leg], S.port, isPort, "port 0-65535"));
+        tr.appendChild(cell(st[leg], S.src, isIpv4, "needs an IPv4 address"));
+      }
+      $("tbody", t).appendChild(tr);
+    }
+    body.appendChild(t);
+    // switch every leg of the channel on (a leg only stays on if it has an address)
+    const sw = document.createElement("button"); sw.type = "button"; sw.style.marginTop = "6px";
+    const allOn = () => names.length && names.every(n => ov.io.flow?.[n]?.[S.en.id] === true);
+    const onSwitchChange = () => { sw.textContent = allOn() ? `✓ all ${names.length} legs of ${label} set to switch on (click to undo)` : `Also switch on all ${names.length} legs of ${label}`; };
+    sw.onclick = () => { const on = !allOn(); names.forEach(n => setOv(n, S.en, on ? true : undefined)); onSwitchChange(); };
+    onSwitchChange(); body.appendChild(sw);
+    host.appendChild(cd);
+  }
+  view.appendChild(det);
 }
 
 $("#devSel").addEventListener("change", renderDevice);

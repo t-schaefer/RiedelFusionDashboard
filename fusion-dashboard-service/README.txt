@@ -163,6 +163,19 @@ own API response contains the field. Profiles live in config-profiles\
 Some settings can take a device off air (flagged "danger" in the page) and the
 write shapes flagged "unverified" are not confirmed on a unit yet.
 
+Multicast addresses and ports per channel: tab "3 - Per device" -> pick the
+device (after "Read selected") -> "Channel multicast addresses & ports". One
+block per channel (CH01 RX ...), one row per stream (V01, A01-A04, D01), with
+address / port / source of the primary and secondary leg side by side; the
+grey placeholder is the value the device has now. Address must be multicast
+(224-239.x.x.x, or 0.0.0.0 = not set), port 0-65535, source a plain IPv4 -
+anything else turns red and is not stored. "Also switch on all 12 legs of
+CHxx" sets every leg of the channel to enabled (the device only keeps a leg
+on once it has an address). These are per-flow overrides, so nothing is sent
+until tab 4 "Preview & apply": you see the diff first, a backup is saved, and
+every changed field is read back. The same values are in the generic "Flows"
+grid below the panel (all flow fields) and in the CSV import.
+
 Login: the Config page needs a password; the dashboard itself stays open.
 Set or change it by double-clicking Set-ConfigPassword-FusionDashboard.bat
 (salted PBKDF2 hash in auth.json, not in git; effective at once). One shared
