@@ -23,6 +23,7 @@ Polling design (why it's built this way - matters at 100+ devices):
 """
 
 import gzip
+import ipaddress
 import json
 import logging
 import logging.handlers
@@ -622,6 +623,135 @@ def enable_channel_flows(ip, channel):
     }
 
 
+def _channel_flow_list(ip, channel):
+    """[{flow, name, essence, leg}] for one channel, looked up fresh from /telemetry/devices."""
+    rows, _ = get_stream_rates(ip)
+    flows = []
+    for r in rows:
+        fid = r.get("flow")
+        if r.get("channel") == channel and is_valid_id(fid) and all(f["flow"] != fid for f in flows):
+            flows.append({"flow": fid, "name": r.get("name"), "essence": r.get("essence"), "leg": r.get("leg")})
+    if not flows:
+        raise LookupError("no flows found for channel %s on %s" % (channel, ip))
+    return flows
+
+
+def get_channel_addresses(ip, channel):
+    """
+    Current multicast settings of every flow of one channel (first link of
+    each flow): destination address / port, source address (the SSM source
+    filter on a receiver, the sender's own address on a sender), and whether the
+    flow is enabled. One /flows/{id} GET per flow, on demand only.
+    """
+    flows = _channel_flow_list(ip, channel)
+    first, used_ip, used_net = call_with_failover(
+        ip, lambda addr: http_get_json(addr, "/emsfp/node/v1/flows/" + flows[0]["flow"], REQUEST_TIMEOUT_SEC)
+    )
+    out = []
+    for i, f in enumerate(flows):
+        try:
+            body = first if i == 0 else http_get_json(used_ip, "/emsfp/node/v1/flows/" + f["flow"], REQUEST_TIMEOUT_SEC)
+        except Exception:
+            body = None
+        link = _flow_link0(body)
+        out.append(dict(f, **{
+            "dst_ip_addr": link.get("dst_ip_addr"), "dst_udp_port": link.get("dst_udp_port"),
+            "src_ip_addr": link.get("src_ip_addr"), "enable": str(link.get("enable")) == "1",
+            "switch_state": link.get("switch_state"), "readable": body is not None,
+        }))
+    return {"network": used_net, "flows": out}
+
+
+def _clean_ipv4(value, what, multicast_only=False):
+    value = str(value).strip()
+    try:
+        addr = ipaddress.IPv4Address(value)
+    except ValueError:
+        raise ValueError("%s: '%s' is not an IPv4 address" % (what, value))
+    if multicast_only and not (addr.is_multicast or str(addr) == "0.0.0.0"):
+        raise ValueError("%s: %s is not a multicast address (224.0.0.0 - 239.255.255.255; 0.0.0.0 clears it)" % (what, value))
+    return str(addr)
+
+
+def set_channel_addresses(ip, channel, changes, enable_after=False):
+    """
+    Writes multicast address / port (and optionally source address) to flows
+    of one channel: POST /flows/{id} {"network": {"dst_ip_addr", "dst_udp_port",
+    "src_ip_addr"}} - the flat 'network' object the old flow editor posts
+    (address as string, ports as numbers). Only the keys given are sent, and
+    every flow id must belong to the channel (looked up fresh, not trusted
+    from the browser). Each flow is read back afterwards and compared, so a
+    value the device did not take is reported instead of silently assumed.
+    With enable_after, flows that now have a destination are switched on
+    (the device ignores 'enable' while the destination is 0.0.0.0).
+    changes: [{"flow", "dst_ip_addr"?, "dst_udp_port"?, "src_ip_addr"?}]
+    """
+    flows = {f["flow"]: f for f in _channel_flow_list(ip, channel)}
+    plan = []
+    for c in changes:
+        fid = c.get("flow")
+        if fid not in flows:
+            raise ValueError("flow %s does not belong to CH%02d" % (str(fid)[:8], channel))
+        label = "%s (%s)" % (flows[fid]["name"], flows[fid]["leg"])
+        net = {}
+        if c.get("dst_ip_addr") not in (None, ""):
+            net["dst_ip_addr"] = _clean_ipv4(c["dst_ip_addr"], label + " address", multicast_only=True)
+        if c.get("dst_udp_port") not in (None, ""):
+            try:
+                port = int(c["dst_udp_port"])
+            except (TypeError, ValueError):
+                raise ValueError("%s port: '%s' is not a number" % (label, c["dst_udp_port"]))
+            if not 0 <= port <= 65535:
+                raise ValueError("%s port: %d is outside 0-65535" % (label, port))
+            net["dst_udp_port"] = port
+        if c.get("src_ip_addr") not in (None, ""):
+            net["src_ip_addr"] = _clean_ipv4(c["src_ip_addr"], label + " source")
+        if net:
+            plan.append((fid, label, net))
+    if not plan:
+        raise ValueError("nothing to change")
+
+    first_path = "/emsfp/node/v1/flows/" + plan[0][0]
+    _, used_ip, used_net = call_with_failover(ip, lambda addr: http_get_json(addr, first_path, REQUEST_TIMEOUT_SEC))
+    results = []
+    for fid, label, net in plan:
+        entry = {"flow": fid, "name": flows[fid]["name"], "leg": flows[fid]["leg"], "sent": net}
+        try:
+            http_post(used_ip, "/emsfp/node/v1/flows/" + fid, {"network": net}, REQUEST_TIMEOUT_SEC)
+            entry["ok"] = True
+        except Exception as e:
+            entry.update(ok=False, error=str(e))
+        results.append(entry)
+
+    time.sleep(0.5)
+    for entry in results:
+        if not entry["ok"]:
+            continue
+        try:
+            link = _flow_link0(http_get_json(used_ip, "/emsfp/node/v1/flows/" + entry["flow"], REQUEST_TIMEOUT_SEC))
+        except Exception as e:
+            entry.update(ok=False, error="read-back failed: " + str(e))
+            continue
+        sent = entry["sent"]
+        mismatch = {k: {"wanted": v, "device": link.get(k)} for k, v in sent.items() if str(link.get(k)) != str(v)}
+        entry["after"] = {k: link.get(k) for k in sent}
+        if mismatch:
+            entry.update(ok=False, error="device holds " + ", ".join("%s=%s" % (k, m["device"]) for k, m in mismatch.items()))
+        elif enable_after and str(link.get("dst_ip_addr")) not in ("0.0.0.0", "", "None") and str(link.get("enable")) != "1":
+            try:
+                http_post(used_ip, "/emsfp/node/v1/flows/" + entry["flow"], {"network": {"enable": "1"}}, REQUEST_TIMEOUT_SEC)
+                entry["enabled"] = True
+            except Exception as e:
+                entry["enable_error"] = str(e)
+    return {
+        "network": used_net,
+        "total": len(results),
+        "succeeded": sum(1 for r in results if r["ok"]),
+        "failed": [r for r in results if not r["ok"]],
+        "enabledNow": sum(1 for r in results if r.get("enabled")),
+    }
+
+
 def reset_device_counters(ip):
     """
     All flows of one Fusion at once: POST /self/system {"counters_reset": "1"},
@@ -880,6 +1010,23 @@ class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path.startswith("/api/devices/channel-addresses"):
+            q = parse_qs(urlparse(self.path).query)
+            ip = (q.get("ip") or [""])[0]
+            try:
+                channel = int((q.get("channel") or [""])[0])
+            except ValueError:
+                channel = None
+            if ip not in STATE or channel is None:
+                self._send_json({"ok": False, "error": "valid ip and integer channel are required"}, 400)
+                return
+            try:
+                self._send_json(dict(get_channel_addresses(ip, channel), ok=True))
+            except LookupError as e:
+                self._send_json({"ok": False, "error": str(e)}, 404)
+            except Exception as e:
+                logger.error("channel addresses read failed for %s / CH%s: %s", ip, channel, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path.startswith("/api/devices/colorbars"):
             ip = (parse_qs(urlparse(self.path).query).get("ip") or [""])[0]
             if not ip or ip not in STATE:
@@ -1013,6 +1160,25 @@ class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, 404)
             except Exception as e:
                 logger.error("channel reset failed for %s / CH%02d: %s", ip, channel, e)
+                self._send_json({"ok": False, "error": str(e)}, 502)
+        elif self.path == "/api/devices/channel-addresses":
+            ip = (data.get("ip") or "").strip()
+            channel = data.get("channel")
+            changes = data.get("changes")
+            if not ip or ip not in STATE or not isinstance(channel, int) or isinstance(channel, bool) or not isinstance(changes, list):
+                self._send_json({"ok": False, "error": "valid ip, integer channel and a changes list are required"}, 400)
+                return
+            logger.warning("set channel addresses requested for %s / CH%02d: %s", ip, channel, changes)
+            try:
+                result = set_channel_addresses(ip, channel, changes, bool(data.get("enableAfter")))
+                logger.warning("set channel addresses for %s / CH%02d: %s", ip, channel, result)
+                self._send_json(dict(result, ok=True))
+            except ValueError as e:
+                self._send_json({"ok": False, "error": str(e)}, 400)
+            except LookupError as e:
+                self._send_json({"ok": False, "error": str(e)}, 404)
+            except Exception as e:
+                logger.error("set channel addresses failed for %s / CH%02d: %s", ip, channel, e)
                 self._send_json({"ok": False, "error": str(e)}, 502)
         elif self.path == "/api/devices/channel-enable":
             ip = (data.get("ip") or "").strip()

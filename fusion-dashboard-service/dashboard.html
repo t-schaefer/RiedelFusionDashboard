@@ -46,6 +46,12 @@
     .chip.active { background: #0d6efd; border-color: #0d6efd; color: #fff; }
     .chip .n { font-weight: 400; opacity: 0.75; margin-left: 4px; }
     .chip .off { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #dc3545; color: #fff; font-size: 0.72rem; }
+    .modalBg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+    .modalBox { background: #fff; border-radius: 8px; padding: 16px 18px; max-width: 900px; width: 100%; box-shadow: 0 6px 30px rgba(0,0,0,0.3); }
+    .modalBox table { width: 100%; }
+    .modalBox input[type=text] { width: 100%; font-family: monospace; }
+    .modalBox input.changed { border-color: #ffc107; background: #fff8e1; }
+    .modalBox input.bad { border-color: #dc3545; background: #fdecea; }
     .hint { color: #6c757d; font-size: 0.82rem; margin: 0 0 8px 2px; }
     tr.detail td { background: #f8f9fa; white-space: normal; }
     .hidden { display: none; }
@@ -916,7 +922,8 @@ function streamsSectionHtml(ip) {
         const seqErr = rows.reduce((n, s) => n + (parseInt(s.sequence_error, 10) || 0), 0);
         const dir = dirLabel[rows[0].chType] || rows[0].chType || "";
         const chBtns = typeof channel === "number"
-            ? `<button class="btn channelEnableBtn" data-channel="${channel}" title="Switch ON all flows of ${label} (every stream, pri + sec)">Enable ${label}</button> ` +
+            ? `<button class="btn channelAddrBtn" data-channel="${channel}" title="Enter multicast address / port (and source) for the flows of ${label}">Addresses ${label}</button> ` +
+              `<button class="btn channelEnableBtn" data-channel="${channel}" title="Switch ON all flows of ${label} (every stream, pri + sec)">Enable ${label}</button> ` +
               `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
               `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
             : "";
@@ -940,6 +947,9 @@ function fmtLegCounters(legs) {
 function wireFlowResetButtons(ip, id) {
     document.querySelectorAll("#streamsBody-" + id + " .flowResetBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); resetFlow(ip, id, btn.dataset.flow, btn.dataset.mode); };
+    });
+    document.querySelectorAll("#streamsBody-" + id + " .channelAddrBtn").forEach(btn => {
+        btn.onclick = (ev) => { ev.stopPropagation(); openAddressEditor(ip, id, parseInt(btn.dataset.channel, 10)); };
     });
     document.querySelectorAll("#streamsBody-" + id + " .channelEnableBtn").forEach(btn => {
         btn.onclick = (ev) => { ev.stopPropagation(); enableChannel(ip, id, parseInt(btn.dataset.channel, 10)); };
@@ -1040,6 +1050,88 @@ async function applySdiBitrate(ip, id, value) {
     } catch (e) {
         alert("Failed to set the SDI bitrate: " + e.message);
     }
+}
+
+// Multicast address / port editor for one channel. A dialog on top of the page
+// (not inside the device row), because the row is re-rendered every 4s and
+// would throw away what is being typed.
+const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+function isIpv4(v) { const m = IPV4_RE.exec(v); return !!m && m.slice(1).every(n => +n <= 255); }
+function closeAddressEditor() { const m = document.getElementById("addrModal"); if (m) m.remove(); }
+
+async function openAddressEditor(ip, id, channel) {
+    const label = "CH" + String(channel).padStart(2, "0");
+    closeAddressEditor();
+    const modal = document.createElement("div");
+    modal.id = "addrModal"; modal.className = "modalBg";
+    modal.innerHTML = `<div class="modalBox"><b>${label} on ${ip}</b> - loading flows...</div>`;
+    modal.onclick = (ev) => { if (ev.target === modal) closeAddressEditor(); };
+    document.body.appendChild(modal);
+    let data;
+    try {
+        const res = await fetch("/api/devices/channel-addresses?ip=" + encodeURIComponent(ip) + "&channel=" + channel);
+        data = await res.json();
+    } catch (e) { data = { ok: false, error: e.message }; }
+    if (!data.ok) {
+        modal.firstChild.innerHTML = `<b>${label} on ${ip}</b><p class="alert">Could not read the flows: ${escapeHtml(data.error || "unknown error")}</p><button class="btn" id="addrClose">Close</button>`;
+        document.getElementById("addrClose").onclick = closeAddressEditor;
+        return;
+    }
+    const f = data.flows;
+    const rowHtml = (x, i) => `<tr>
+        <td>${escapeHtml(x.name || "-")}</td><td>${x.leg || "-"}</td>
+        <td><input type="text" data-i="${i}" data-k="dst_ip_addr" value="${x.dst_ip_addr ?? ""}" placeholder="239.x.x.x"></td>
+        <td style="width:90px"><input type="text" data-i="${i}" data-k="dst_udp_port" value="${x.dst_udp_port ?? ""}"></td>
+        <td><input type="text" data-i="${i}" data-k="src_ip_addr" value="${x.src_ip_addr ?? ""}" placeholder="source (SSM)"></td>
+        <td>${x.enable ? '<span class="badge success">on</span>' : '<span class="badge secondary">off</span>'}</td></tr>`;
+    modal.firstChild.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <b>Multicast addresses - ${label} on ${ip}</b><button class="btn" id="addrClose">&times; Close</button>
+      </div>
+      <div class="muted small" style="margin-bottom:8px;">Destination address (multicast, 224-239.x.x.x), UDP port and source address of every flow of this channel. Changed fields turn yellow; only those are sent. 0.0.0.0 = not set.
+        A receiver joins the group in <i>address</i> (filtered to <i>source</i> if one is set); a sender transmits to it.</div>
+      <div style="max-height:55vh; overflow-y:auto;"><table class="mini-table"><thead><tr><th>Stream</th><th>Leg</th><th>Address</th><th>Port</th><th>Source</th><th>Flow</th></tr></thead><tbody>${f.map(rowHtml).join("")}</tbody></table></div>
+      <div style="margin-top:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <label class="small"><input type="checkbox" id="addrEnable" checked> switch the changed flows on afterwards (only possible with an address)</label>
+        <button class="btn" id="addrSave" style="margin-left:auto; background:#0d6efd; color:#fff; border-color:#0d6efd;" disabled>Save changes</button>
+      </div>
+      <div id="addrMsg" class="small" style="margin-top:8px; white-space:pre-wrap;"></div>`;
+    document.getElementById("addrClose").onclick = closeAddressEditor;
+    const inputs = [...modal.querySelectorAll("input[data-i]")];
+    const validate = (inp) => {
+        const k = inp.dataset.k, v = inp.value.trim();
+        const orig = String(f[inp.dataset.i][k] ?? "");
+        inp.classList.toggle("changed", v !== orig);
+        const bad = v !== orig && ((k === "dst_udp_port") ? !(/^\d+$/.test(v) && +v <= 65535) : (v === "" || !isIpv4(v)) || (k === "dst_ip_addr" && !(+v.split(".")[0] >= 224 && +v.split(".")[0] <= 239) && v !== "0.0.0.0"));
+        inp.classList.toggle("bad", !!bad);
+    };
+    const refreshSave = () => {
+        document.getElementById("addrSave").disabled = !inputs.some(i => i.classList.contains("changed")) || inputs.some(i => i.classList.contains("bad"));
+    };
+    inputs.forEach(inp => inp.oninput = () => { validate(inp); refreshSave(); });
+    document.getElementById("addrSave").onclick = async () => {
+        const byFlow = {};
+        inputs.filter(i => i.classList.contains("changed")).forEach(i => {
+            const x = f[i.dataset.i];
+            (byFlow[x.flow] = byFlow[x.flow] || { flow: x.flow })[i.dataset.k] = i.value.trim();
+        });
+        const changes = Object.values(byFlow);
+        const msg = document.getElementById("addrMsg");
+        if (!confirm("Write the new address / port to " + changes.length + " flow(s) of " + label + " on " + ip + "?\n\nOn a receiver this changes which multicast group it joins; on a sender it changes where it transmits. A running stream will drop out while the address changes.")) return;
+        msg.textContent = "Saving...";
+        try {
+            const res = await fetch("/api/devices/channel-addresses", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ip, channel, changes, enableAfter: document.getElementById("addrEnable").checked })
+            });
+            const r = await res.json();
+            if (!r.ok) { msg.innerHTML = `<span class="alert">Failed: ${escapeHtml(r.error || "unknown error")}</span>`; return; }
+            msg.textContent = r.succeeded + "/" + r.total + " flows written and read back OK (via " + (r.network || "?") + ")" +
+                (r.enabledNow ? ", " + r.enabledNow + " switched on" : "") +
+                (r.failed.length ? "\n\nNot taken by the device:\n" + r.failed.map(x => "  " + (x.name || String(x.flow).slice(0, 8)) + " (" + x.leg + "): " + x.error).join("\n") : "");
+            if (!r.failed.length) setTimeout(() => { closeAddressEditor(); if (streamCache[ip]) loadStreams(ip, id); }, 1200);
+        } catch (e) { msg.innerHTML = `<span class="alert">Failed: ${escapeHtml(e.message)}</span>`; }
+    };
 }
 
 async function enableChannel(ip, id, channel) {

@@ -245,6 +245,18 @@ Flow resets (in the Stream rates table / header)
                channel's flows fresh from the device; the confirmation
                shows how many flows were accepted and the channel's total
                sequence errors before -> after.
+  Addresses CHxx (channel header row): opens a dialog to enter the multicast
+               address, UDP port and source address of every flow of that
+               channel (12 on a Fusion). Current values are pre-filled; only
+               changed fields (yellow) are sent. Address must be multicast
+               (224-239.x.x.x, or 0.0.0.0 = not set), port 0-65535, source a
+               plain IPv4. Written as {"network": {"dst_ip_addr",
+               "dst_udp_port", "src_ip_addr"}} to /flows/{id} - the flat
+               object the old flow editor posts - and every flow is read back
+               afterwards: a value the device did not take is listed. Optional
+               "switch on afterwards" turns on the changed flows that now have
+               an address. Not yet confirmed on a live unit by this tool
+               (the 'enable' write was); check the read-back message.
   Enable CHxx (channel header row): switches ON every flow of that channel
                (12 on a Fusion: V, A1-A4, D, pri + sec) in one go by writing
                {"network": {"enable": "1"}} to /flows/{id} - the same write
