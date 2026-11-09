@@ -176,6 +176,22 @@ until tab 4 "Preview & apply": you see the diff first, a backup is saved, and
 every changed field is read back. The same values are in the generic "Flows"
 grid below the panel (all flow fields) and in the CSV import.
 
+SDI bitrate and video format in the config tool:
+  - "SDI operating bit rate (Fusion)" (group System, batch profile or per
+    device) offers integer / fractional / auto - what the devices report
+    (fleet: auto 52, integer 42). Fusion only, MuoN cards have no /sdi.
+  - Video format of a flow (bit depth, range, colorimetry, transfer
+    characteristic, TR offset and the numeric format codes) sits in the
+    channel block under the stream table ("Video format (V01)", primary and
+    secondary leg) and as "Flow format" settings in the per-I/O grids. Only
+    flows whose own GET reports a format object get the fields. UNVERIFIED:
+    a receiver normally takes the format from the incoming stream and a
+    sender from its SDI input, so the device may ignore the write; the shape
+    ({"format": {...}} on /flows/{id}) is derived from the field names.
+    Try one flow on a test unit and look at the read-back. The format_code_*
+    fields are device codes without a documented name - there is no
+    "1080p50" button: read a flow that carries 1080p50 and copy its codes.
+
 Login: the Config page needs a password; the dashboard itself stays open.
 Set or change it by double-clicking Set-ConfigPassword-FusionDashboard.bat
 (salted PBKDF2 hash in auth.json, not in git; effective at once). One shared

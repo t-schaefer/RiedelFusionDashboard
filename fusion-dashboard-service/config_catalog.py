@@ -128,7 +128,10 @@ for eth in ("e1", "e2"):
     _add(f"phy.{eth}.fec", "System", f"{eth} FEC scheme", DEVICE, [eth, "fec", "scheme"], "enum", endpoint="self/phy",
          options=["rs", "none"], danger=True, help="Sent together with commit=true; the link retrains.")
 _add("sdi.bitrate", "System", "SDI operating bit rate (Fusion)", DEVICE, ["configuration", "operating_bit_rate"],
-     "enum", endpoint="sdi", options=["auto", "1", "2", "3", "4"], evidence="js")
+     "enum", endpoint="sdi", options=["auto", "integer", "fractional"], evidence="js",
+     help="integer = 50/60 Hz families, fractional = 59.94/29.97 (1000/1001) families, auto = follow the signal. "
+          "Fleet read: 'auto' on 52 devices, 'integer' on 42; the device also reports running_operating_bit_rate. "
+          "Fusion only (MuoN cards have no /sdi).")
 
 # ---------------------------------------------------------------- PTP
 _add("ptp.mode", "PTP", "Mode", DEVICE, ["mode"], endpoint="refclk")
@@ -193,6 +196,33 @@ for key, label, typ, batch in (
     _add(f"flow.{key}", "Flow", label, FLOW, ["network", 0, key], typ, body=["network", key], batch=batch,
          danger=key in ("dst_ip_addr", "dst_udp_port", "enable"),
          evidence="js" if key in ("src_ip_addr", "src_udp_port", "dst_ip_addr", "dst_udp_port") else "api")
+
+# Video format of a flow: the 'format' object of GET /flows/{id}. A receiver
+# normally derives it from the incoming stream and a sender from its SDI input,
+# so the device may treat these as read-only - the write shape
+# ({"format": {...}} posted to /flows/{id}, next to 'network') is NOT confirmed
+# on a unit, which is why every entry is "api" + danger: try one flow on a test
+# card first and check the read-back. The format_code_* values are numeric
+# device codes (e.g. rate 9216, mode 16); their meaning (1080p50 etc.) is not
+# documented - read a flow that is known to carry the format you want and copy
+# its codes.
+FORMAT_HELP = ("Format of the flow (GET /flows/{id}.format). Receivers normally take it from the incoming stream, "
+               "senders from the SDI input, so the device may ignore a write. Write shape not confirmed - test on one flow first.")
+for key, label, typ, options, batch in (
+    ("format_bit_depth", "Format: bit depth", "int", [8, 10, 12, 16], True),
+    ("range", "Format: range", "enum", ["NARROW", "FULL"], True),
+    ("format_colorimetry", "Format: colorimetry", "enum", ["BT601", "BT709", "BT2020", "BT2100"], True),
+    ("format_tcs", "Format: transfer characteristic", "enum", ["SDR", "HLG", "PQ"], True),
+    ("format_tr_offset", "Format: TR offset", "int", None, False),
+    ("format_code_mode", "Format code: mode", "int", None, False),
+    ("format_code_rate", "Format code: frame rate", "int", None, False),
+    ("format_code_p_scan", "Format code: progressive scan", "int", None, False),
+    ("format_code_t_scan", "Format code: transmission scan", "int", None, False),
+    ("format_code_sampling", "Format code: sampling", "int", None, False),
+    ("sampling_format", "Format: sampling format", "int", None, False),
+):
+    _add(f"flow.fmt.{key}", "Flow format", label, FLOW, ["format", key], typ, options=options,
+         body=["format", key], batch=batch, danger=True, evidence="api", help=FORMAT_HELP)
 
 # ---------------------------------------------------------------- SFP ports (Fusion)
 _add("port.host_pinout", "SFP port", "Host pinout", PORT, ["host_pinout"], "enum", options=["2T", "2R", "1T1R"],

@@ -672,6 +672,24 @@ function buildChannelPanel(view, r, ov) {
       $("tbody", t).appendChild(tr);
     }
     body.appendChild(t);
+    // video format of this channel's video flow (stream 0): same overrides pipeline, shown per leg
+    const vid = c.streams.get(0);
+    const FMT = ["format_bit_depth", "range", "format_colorimetry", "format_tcs", "format_tr_offset", "format_code_mode", "format_code_rate"]
+      .map(k => BY_ID["flow.fmt." + k]).filter(Boolean);
+    if (vid && FMT.some(f => ["pri", "sec"].some(l => vid[l] && currentOf(r, f, vid[l]) !== undefined))) {
+      const ft = document.createElement("table"); ft.style.marginTop = "8px";
+      ft.innerHTML = `<thead><tr><th>Video format (V01)</th>${FMT.map(f => `<th title="${esc(f.help || "")}">${esc(f.label.replace(/^Format( code)?: /, "$1 ").trim())}</th>`).join("")}</tr></thead><tbody></tbody>`;
+      for (const [leg, lname] of [["pri", "Primary"], ["sec", "Secondary"]]) {
+        if (!vid[leg]) continue;
+        const tr = document.createElement("tr"); tr.innerHTML = `<td>${lname}</td>`;
+        for (const f of FMT) tr.appendChild(cell(vid[leg], f, () => true, ""));
+        $("tbody", ft).appendChild(tr);
+      }
+      body.appendChild(ft);
+      const note = document.createElement("p"); note.className = "small muted"; note.style.margin = "4px 0 0";
+      note.innerHTML = `The format normally follows the stream (receiver) or the SDI input (sender), so the device may ignore these; the write is <b>unverified</b> - try one flow on a test unit and check the read-back. The "code" fields are numeric device codes (no 1080p50 name known): to get 1080p50, read a flow that carries it and copy its codes.`;
+      body.appendChild(note);
+    }
     // switch every leg of the channel on (a leg only stays on if it has an address)
     const sw = document.createElement("button"); sw.type = "button"; sw.style.marginTop = "6px";
     const allOn = () => names.length && names.every(n => ov.io.flow?.[n]?.[S.en.id] === true);
