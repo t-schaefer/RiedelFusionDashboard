@@ -146,6 +146,41 @@ outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
 
+Guided setup (/guide) - commissioning a new Fusion step by step
+-----------------------------------------------------------------
+"Guide" button in the header, or http://<this PC>:8090/guide. A step-by-step
+assistant for an engineer who sets up a Fusion from factory state and then
+hands it over to monitoring. It only shows what is needed at each step, a step
+stays locked until the one before is done, and every write is read back:
+    1 Connect          MAC from the label (first media port, slot 3) -> factory
+                       address (OOB 11.a.b.c/8, media ports 10.a.b.c, last three MAC
+                       bytes in decimal), laptop instructions, reads type / serial /
+                       firmware. You compare the serial with the label.
+    2 Name & network   hostname, tag, Red IP/prefix/gateway (Blue derived from Red),
+                       VLANs. Checks addresses and that no dashboard device uses them.
+                       After the write the device moves; "Check connection" finds it on
+                       the new address and compares what it reports.
+    3 Time & services  PTP, NMOS registry, syslog, IGMP, ST 2022-7 class, LLDP from the
+                       site settings (plus the rest of the site-default profile).
+    4 Channels & audio on every channel video, the first N audio streams and data are
+                       switched on, both legs (ST 2022-7); the audio is mapped in order
+                       onto the 16 embedded channels of the SDI outputs (the n-th SDI
+                       output belongs to the n-th receive channel).
+    5 Check & hand over  reachable on Red and Blue, links, PTP locked, NMOS registered,
+                       LLDP neighbour, temperature, warnings, hostname, syslog -> then
+                       the device is added to the dashboard with name and tag.
+"Site settings" (set once): syslog, NMOS registry, PTP domain/DSCP, IGMP, ST 2022-7
+class, VLANs, Blue offset, and how many audio streams the site uses with how many
+channels each (streams x channels <= 16). Stored in guide-site.json, progress per
+device in guide-state.json (both local, not in git).
+It uses the same login as /config (Set-ConfigPassword-FusionDashboard.bat) and the
+config tool's read / plan / apply / read-back code, so the same safety applies. Writes
+flagged "unverified" are not yet confirmed on a unit; the multicast addresses are not
+set here (routing assigns them, or use Expert config). Roadmap: docs/ROADMAP.md.
+
+Try it without hardware: python tools/fake_fleet.py   (simulated factory Fusion, then
+open http://127.0.0.1:8190/guide); python tools/test_guide.py runs the logic test.
+
 Device config (the former MuoN Config Tool) - /config
 -------------------------------------------------------
 Batch configuration of MuoN cards and Fusion gateways, built into this

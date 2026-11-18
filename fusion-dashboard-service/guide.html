@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guided Setup - PLS Fusion Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #dde1e8;
+    --accent: #2563eb; --accent-soft: #e6eefe; --ok: #15803d; --ok-soft: #e3f4e8;
+    --warn: #b45309; --warn-soft: #fdf1dc; --bad: #b91c1c; --bad-soft: #fde6e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13161c; --panel: #1b1f27; --text: #e4e7ee; --muted: #8d95a8; --line: #2c323e;
+      --accent: #6d9bff; --accent-soft: #1d2a45; --ok: #4ade80; --ok-soft: #14301f;
+      --warn: #fbbf24; --warn-soft: #3a2c10; --bad: #f87171; --bad-soft: #3b1a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sp { flex: 1; }
+  a.btn, button { font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; text-decoration: none; display: inline-block; }
+  a { color: var(--accent); }
+  a.btn { color: var(--text); }
+  a.btn.primary { color: #fff; }
+  button:hover, a.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 20px; }
+  .card h3 { margin: 18px 0 6px; font-size: 15px; }
+  .why { color: var(--muted); margin: 0 0 16px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .stepper { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stepper .s { flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+  .stepper .s .n { font-size: 12px; color: var(--muted); }
+  .stepper .s .t { font-weight: 600; }
+  .stepper .s.done { border-color: var(--ok); background: var(--ok-soft); }
+  .stepper .s.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .stepper .s.locked { opacity: .5; }
+  .stepper .s.problem { border-color: var(--bad); }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  label .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
+  input[type=text], input[type=number], select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; } .row > * { flex: 1; min-width: 150px; }
+  .box { border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+  .box.info { background: var(--accent-soft); } .box.warn { background: var(--warn-soft); }
+  .box.ok { background: var(--ok-soft); } .box.bad { background: var(--bad-soft); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 8px; margin-left: 6px; }
+  .tag.danger { background: var(--bad-soft); color: var(--bad); } .tag.unv { background: var(--warn-soft); color: var(--warn); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+  code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
+  .facts div:nth-child(odd) { color: var(--muted); }
+  .dev { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; width: 120px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  ol.how { padding-left: 20px; } ol.how li { margin: 4px 0; }
+  .check { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .check .i { width: 22px; font-weight: 700; }
+  .spin::after { content: ""; display: inline-block; width: 12px; height: 12px; margin-left: 8px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Guided setup</h1><span class="muted" id="siteName"></span>
+  <span class="sp"></span>
+  <button id="btnHome">Devices</button>
+  <button id="btnSite">Site settings</button>
+  <a class="btn" href="/">Dashboard</a>
+  <a class="btn" href="/config" title="All settings at once, for experts">Expert config</a>
+</header>
+<main id="main"><div class="card">Loading ...</div></main>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const show = (v) => (v === null || v === undefined || v === "") ? "-" : (typeof v === "boolean" ? (v ? "on" : "off") : String(v));
+
+let STEPS = [], SITE = null, view = "home", mac = null, DEV = null, DEFAULTS = null, busy = false;
+let form = {};            // identity form values, kept while the page re-renders
+let last = {};            // last plan / apply result per step
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 401 || res.redirected && /login/.test(res.url)) { location.href = "/config/login?next=/guide"; throw new Error("login required"); }
+  const data = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
+  if (!res.ok || data.ok === false) throw new Error(data.error || "HTTP " + res.status);
+  return data;
+}
+function remember() { try { localStorage.setItem("guide.mac", mac || ""); } catch (e) {} }
+
+// ------------------------------------------------------------------ helpers
+const stepStatus = (id) => (DEV && DEV.steps[id] && DEV.steps[id].status) || "pending";
+function unlocked(id) {
+  const i = STEPS.findIndex(s => s.id === id);
+  return STEPS.slice(0, i).every(s => stepStatus(s.id) === "done");
+}
+function currentStep() { return (DEV && DEV.next) || "verify"; }
+function setBusy(on, msg) { busy = on; const b = $("#busyMsg"); if (b) b.innerHTML = on ? `<span class="spin">${esc(msg || "Working")}</span>` : ""; document.querySelectorAll("main button").forEach(x => { if (on) x.dataset.was = x.disabled ? "1" : "0"; x.disabled = on ? true : x.dataset.was === "1"; }); }
+async function run(msg, fn) {
+  setBusy(true, msg);
+  try { await fn(); } catch (e) { alert(e.message); } finally { setBusy(false); }
+}
+
+// ------------------------------------------------------------------ screens
+async function render() {
+  $("#siteName").textContent = SITE && SITE.site_name ? "- " + SITE.site_name : "";
+  if (view === "site") return renderSite();
+  if (view === "device" && DEV) return renderDevice();
+  return renderHome();
+}
+
+async function renderHome() {
+  const d = await api("/api/guide/devices");
+  const devs = d.devices.sort((a, b) => (b.updated || "").localeCompare(a.updated || ""));
+  const siteWarn = SITE.configured ? "" : `<div class="box warn"><b>Start here:</b> fill in the <a href="#" id="goSite">Site settings</a> once (syslog, NMOS, PTP, and how many audio streams your site uses). Every device is then configured from them.</div>`;
+  $("#main").innerHTML = `
+    <div class="card">
+      <h2>Set up a Fusion</h2>
+      <p class="why">This guide takes you from a factory-fresh unit to a configured, monitored device in five steps. It shows you only what is needed at each step, and checks every change by reading it back.</p>
+      ${siteWarn}
+      <div class="actions"><button class="primary" id="btnNew" ${SITE.configured ? "" : "disabled"}>Set up a new device</button></div>
+    </div>
+    <div class="card"><h2>Devices in setup</h2>
+      ${devs.length ? devs.map(x => {
+        const done = STEPS.filter(s => (x.steps[s.id] || {}).status === "done").length;
+        const nm = x.name || (x.facts && x.facts.hostname) || x.mac;
+        return `<div class="dev"><div style="flex:1"><b>${esc(nm)}</b><div class="small muted">${esc(x.ip)} &middot; ${esc((x.facts || {}).serial || "")} &middot; ${esc(x.mac)}</div></div>
+          <div class="bar"><div style="width:${done * 100 / STEPS.length}%"></div></div><span class="small muted">${done}/${STEPS.length}</span>
+          <button data-open="${esc(x.mac)}">${x.next ? "Continue" : "Open"}</button></div>`;
+      }).join("") : `<p class="muted">No devices yet.</p>`}
+    </div>
+    <div class="card small muted"><b>Roadmap:</b> firmware check and update, German user interface, "what to do" hints on dashboard warnings.</div>`;
+  const g = $("#goSite"); if (g) g.onclick = (e) => { e.preventDefault(); view = "site"; render(); };
+  const nb = $("#btnNew"); if (nb) nb.onclick = () => { mac = null; DEV = null; form = {}; last = {}; view = "device"; renderConnect(); };
+  document.querySelectorAll("[data-open]").forEach(b => b.onclick = async () => { await openDevice(b.dataset.open); });
+}
+
+async function openDevice(m) {
+  const r = await api("/api/guide/device", { mac: m });
+  mac = m; DEV = r.device; DEFAULTS = r.identityDefaults; last = {}; remember();
+  if (!form.name && DEV.inputs && DEV.inputs.identity) form = Object.assign({}, DEV.inputs.identity);
+  view = "device"; render();
+}
+
+// ---- site settings
+function renderSite() {
+  const s = SITE;
+  const f = (id, label, val, hint, type = "text") => `<label>${label} <span class="hint">${hint || ""}</span></label><input type="${type}" id="${id}" value="${esc(val)}">`;
+  $("#main").innerHTML = `<div class="card"><h2>Site settings</h2>
+    <p class="why">Set once for the whole site. Every new device gets these values, so the engineer does not have to type them again.</p>
+    ${f("s_name", "Site name", s.site_name, "shown in the header")}
+    <h3>Syslog</h3><div class="row"><div>${f("s_sl_server", "Server", s.syslog.server)}</div><div>${f("s_sl_port", "Port", s.syslog.port, "", "number")}</div></div>
+    <h3>NMOS</h3>${f("s_nmos", "Registry (address:port)", s.nmos.registry, "e.g. 10.12.81.11:8080")}
+    <h3>Time (PTP) and multicast</h3>
+    <div class="row"><div>${f("s_ptp_domain", "PTP domain", s.ptp.domain, "0-127", "number")}</div><div>${f("s_ptp_dscp", "PTP DSCP", s.ptp.dscp, "0-63", "number")}</div>
+      <div>${f("s_igmp", "IGMP version", s.system.igmp_version, "2 or 3", "number")}</div><div>${f("s_class", "ST 2022-7 class", s.system.class_2022_7, "a, b, c or d")}</div></div>
+    <h3>Network</h3>
+    <div class="row"><div>${f("s_rvlan", "Red VLAN", s.network.red_vlan, "0 = untagged", "number")}</div><div>${f("s_bvlan", "Blue VLAN", s.network.blue_vlan, "0 = untagged", "number")}</div>
+      <div>${f("s_off", "Blue network offset", s.network.blue_octet_offset, "Blue = Red with 2nd octet + this (1: 10.101.x.x to 10.102.x.x)", "number")}</div></div>
+    <label><input type="checkbox" id="s_rdhcp" ${s.network.red_dhcp ? "checked" : ""}> Red uses DHCP</label>
+    <label><input type="checkbox" id="s_bdhcp" ${s.network.blue_dhcp ? "checked" : ""}> Blue uses DHCP <span class="hint">(as on the existing fleet)</span></label>
+    <h3>Audio</h3>
+    <p class="muted small">Every channel carries video, some audio streams and data, all redundant (ST 2022-7). Choose how many audio streams the site uses and how many channels each stream has. The same layout is mapped to the SDI outputs.</p>
+    <div class="row"><div>${f("s_astreams", "Audio streams per channel", s.audio.streams, "1-4", "number")}</div><div>${f("s_ach", "Channels per audio stream", s.audio.channels_per_stream, "e.g. 2, 4, 8, 16", "number")}</div></div>
+    <div class="box info" id="audioSum"></div>
+    <div class="actions"><button class="primary" id="saveSite">Save site settings</button><span id="busyMsg"></span></div></div>`;
+  const sum = () => { const a = +$("#s_astreams").value, c = +$("#s_ach").value, t = a * c; $("#audioSum").innerHTML = `${a} stream(s) &times; ${c} channel(s) = <b>${t}</b> of 16 embedded SDI audio channels ${t > 16 ? '<span class="bad">- too many</span>' : ""}`; };
+  ["s_astreams", "s_ach"].forEach(i => $("#" + i).oninput = sum); sum();
+  $("#saveSite").onclick = () => run("Saving", async () => {
+    const v = (i) => $("#" + i).value;
+    const r = await api("/api/guide/site", { site: {
+      site_name: v("s_name"), syslog: { server: v("s_sl_server"), port: v("s_sl_port"), enable: true }, nmos: { registry: v("s_nmos") },
+      ptp: { domain: v("s_ptp_domain"), dscp: v("s_ptp_dscp") }, system: { igmp_version: v("s_igmp"), class_2022_7: v("s_class") },
+      network: { red_vlan: v("s_rvlan"), blue_vlan: v("s_bvlan"), blue_octet_offset: v("s_off"), red_dhcp: $("#s_rdhcp").checked, blue_dhcp: $("#s_bdhcp").checked },
+      audio: { streams: v("s_astreams"), channels_per_stream: v("s_ach") } } });
+    SITE = r.site; view = "home"; render();
+  });
+}
+
+// ---- device wizard shell
+function stepperHtml(active) {
+  return `<div class="stepper">${STEPS.map((s, i) => {
+    const st = stepStatus(s.id), cls = st === "done" ? "done" : st === "problem" ? "problem" : "";
+    const lock = DEV && !unlocked(s.id) ? " locked" : "";
+    return `<div class="s ${cls}${s.id === active ? " active" : ""}${lock}"><div class="n">Step ${i + 1} ${st === "done" ? "&#10003;" : st === "written" ? "(waiting)" : ""}</div><div class="t">${esc(s.title)}</div></div>`;
+  }).join("")}</div>`;
+}
+function deviceBar() {
+  if (!DEV || !DEV.facts) return "";
+  const f = DEV.facts;
+  return `<div class="card small" style="padding:10px 16px"><b>${esc(DEV.name || f.hostname || "device")}</b> &middot; ${esc(f.baseType || "")} &middot; serial <span class="mono">${esc(f.serial)}</span> &middot; MAC <span class="mono">${esc(DEV.mac)}</span> &middot; now at <span class="mono">${esc(DEV.ip)}</span></div>`;
+}
+function renderDevice() {
+  const step = (DEV && last.view) || currentStep();
+  const to = { connect: renderConnect, identity: renderIdentity, services: renderServices, channels: renderChannels, verify: renderVerify }[step] || renderConnect;
+  last.view = null; to();
+}
+function go(step) { last.view = step; renderDevice(); }
+
+// ---- step 1: connect
+async function renderConnect() {
+  const connected = DEV && stepStatus("connect") === "done";
+  $("#main").innerHTML = stepperHtml("connect") + deviceBar() + `<div class="card"><h2>1. Connect</h2>
+    <p class="why">${esc(STEPS[0].why)}</p>
+    <h3>A factory-fresh unit</h3>
+    <p class="small muted">A new Fusion gets its address from the MAC address printed on its label (first media port, slot 3).</p>
+    <div class="row"><div><label>MAC address from the label</label><input type="text" id="macIn" placeholder="40:A3:6B:A2:16:14"></div>
+      <div style="flex:0 0 auto;align-self:end"><button id="calc">Show me the address</button></div></div>
+    <div id="factoryOut"></div>
+    <h3>Connect</h3>
+    <div class="row"><div><label>Device address <span class="hint">(or any address it already has)</span></label><input type="text" id="ipIn" value="${esc(DEV ? DEV.ip : "")}" placeholder="11.162.22.20"></div>
+      <div style="flex:0 0 auto;align-self:end"><button class="primary" id="doConnect">Connect and read</button></div></div>
+    <div id="connOut">${connected ? factsHtml(DEV) : ""}</div><span id="busyMsg"></span></div>`;
+  $("#calc").onclick = () => run("Calculating", async () => {
+    const r = await api("/api/guide/factory", { mac: $("#macIn").value });
+    $("#ipIn").value = r.oob;
+    $("#factoryOut").innerHTML = `<div class="box info"><b>OOB port (recommended):</b> <code>${esc(r.oob)}/${r.oob_prefix}</code><br>
+      <b>Media ports:</b> <code>${esc(r.media)}</code><ol class="how">
+      <li>Connect your computer with a cable to the <b>OOB</b> port of the device.</li>
+      <li>Set your computer's network adapter to <code>${esc(r.laptop_oob)}</code> with subnet mask <code>255.0.0.0</code>.</li>
+      <li>Power the device on, wait about a minute, then press <b>Connect and read</b>.</li></ol>
+      <div class="small muted">${r.notes.map(esc).join("<br>")}</div></div>`;
+  });
+  $("#doConnect").onclick = () => run("Connecting and reading the device", async () => {
+    const r = await api("/api/guide/connect", { ip: $("#ipIn").value });
+    DEV = r.device; mac = DEV.mac; remember();
+    const d = await api("/api/guide/device", { mac }); DEFAULTS = d.identityDefaults;
+    $("#connOut").innerHTML = factsHtml(DEV);
+    $("#main").firstElementChild.outerHTML = stepperHtml("connect");
+    wireNext();
+  });
+  if (connected) wireNext();
+}
+function factsHtml(d) {
+  const f = d.facts, ch = (f.channels || []).filter(c => c.type === "decapsulator").length, tx = (f.channels || []).length - ch;
+  return `<div class="box ${f.looksFactory ? "ok" : "warn"}">${f.looksFactory ? "&#10003; This looks like a factory-fresh unit." : "This unit has already been configured (its hostname is not the factory one). You can continue, but check you have the right device."}</div>
+    <div class="facts"><div>Type</div><div>${esc(f.type)} (${esc(f.baseType)})</div><div>Serial number</div><div class="mono">${esc(f.serial)}</div>
+      <div>Firmware</div><div>${esc(f.firmware)}</div><div>Hostname</div><div>${esc(f.hostname)}</div><div>MAC (first port)</div><div class="mono">${esc(d.mac)}</div>
+      <div>Reached via</div><div>${esc(f.address)} (${esc(f.network)})</div><div>Channels</div><div>${ch} receive, ${tx} transmit</div></div>
+    <div class="box info">Compare the <b>serial number</b> above with the label on the device before you continue.</div>
+    <div class="actions" id="nextBox"></div>`;
+}
+function wireNext() {
+  const nb = $("#nextBox"); if (!nb) return;
+  nb.innerHTML = `<button class="primary" id="toIdentity">Yes, this is my device - next</button>`;
+  $("#toIdentity").onclick = () => go("identity");
+}
+
+// ---- generic preview table
+function rowsHtml(rows, opts = {}) {
+  const ch = rows.filter(r => r.status === "change"), same = rows.filter(r => r.status === "unchanged");
+  const bad = rows.filter(r => r.status === "invalid"), uns = rows.filter(r => r.status === "unsupported");
+  let h = "";
+  if (ch.length) {
+    h += `<table><thead><tr><th>Setting</th><th>Now</th><th>New value</th>${opts.verify ? "<th>Result</th>" : ""}</tr></thead><tbody>` + ch.slice(0, opts.limit || 400).map(r =>
+      `<tr><td>${esc(r.label)}${r.danger ? '<span class="tag danger" title="Can interrupt the device or a signal">careful</span>' : ""}${r.unverified ? '<span class="tag unv" title="Write not yet confirmed on a unit">unverified</span>' : ""}</td><td class="mono">${esc(show(r.current))}</td><td class="mono"><b>${esc(show(r.new))}</b></td>` +
+      (opts.verify ? `<td>${r.verify === "ok" ? '<span class="ok">&#10003; confirmed</span>' : `<span class="bad">${esc(r.verify || "not confirmed")}${r.readback !== undefined && r.readback !== null ? " (device says " + esc(show(r.readback)) + ")" : ""}</span>`}</td>` : "") + "</tr>").join("") + "</tbody></table>";
+    if (ch.length > (opts.limit || 400)) h += `<p class="muted small">... and ${ch.length - (opts.limit || 400)} more.</p>`;
+  } else h += `<div class="box ok">Nothing to change - the device already has these values.</div>`;
+  if (same.length) h += `<p class="muted small">${same.length} setting(s) already correct.</p>`;
+  if (uns.length) h += `<p class="muted small">${uns.length} setting(s) skipped: this device does not have them.</p>`;
+  if (bad.length) h += `<div class="box bad">${bad.map(r => esc(r.label) + ": " + esc(r.error)).join("<br>")}</div>`;
+  return h;
+}
+function serialGuard(id) {
+  const f = DEV.facts;
+  return `<label style="font-weight:400"><input type="checkbox" id="${id}"> I am connected to the device with serial <b class="mono">${esc(f.serial)}</b> and want to write these settings.</label>`;
+}
+
+// ---- step 2: name & network
+function renderIdentity() {
+  const d = DEFAULTS || {}, f = Object.assign({ name: "", tag: "", red_ip: "", red_prefix: 30, red_gateway: "", blue_ip: "", blue_gateway: "", blue_prefix: 30, red_vlan: SITE.network.red_vlan, blue_vlan: SITE.network.blue_vlan }, form);
+  const waiting = stepStatus("identity") === "written";
+  const inp = (id, label, hint, type = "text") => `<label>${label} <span class="hint">${hint || ""}</span></label><input type="${type}" id="${id}" value="${esc(f[id])}">`;
+  $("#main").innerHTML = stepperHtml("identity") + deviceBar() + `<div class="card"><h2>2. Name &amp; network</h2><p class="why">${esc(STEPS[1].why)}</p>
+    ${waiting ? "" : `<div class="row"><div>${inp("name", "Device name", "e.g. CS3.IP/HI 09 - used as hostname and in the dashboard")}</div><div>${inp("tag", "Tag (optional)", "e.g. C03FRMSDIGTW009")}</div></div>
+    <h3>Red network (primary)</h3><div class="row"><div>${inp("red_ip", "IP address", "")}</div><div>${inp("red_prefix", "Prefix length", "30 = /30", "number")}</div><div>${inp("red_gateway", "Gateway", "")}</div></div>
+    <h3>Blue network (backup)</h3><p class="muted small">Left empty, Blue is derived from Red (second octet + ${SITE.network.blue_octet_offset}).</p>
+    <div class="row"><div>${inp("blue_ip", "IP address", "empty = derived")}</div><div>${inp("blue_prefix", "Prefix length", "", "number")}</div><div>${inp("blue_gateway", "Gateway", "empty = derived")}</div></div>
+    <details><summary class="muted small">VLANs (from the site settings)</summary><div class="row"><div>${inp("red_vlan", "Red VLAN", "0 = untagged", "number")}</div><div>${inp("blue_vlan", "Blue VLAN", "0 = untagged", "number")}</div></div></details>
+    <div class="actions"><button id="preview">Show what will change</button></div><div id="planOut"></div>`}
+    <div id="writeOut"></div><span id="busyMsg"></span></div>`;
+  if (waiting) return renderWaiting();
+  const collect = () => { ["name", "tag", "red_ip", "red_prefix", "red_gateway", "blue_ip", "blue_prefix", "blue_gateway", "red_vlan", "blue_vlan"].forEach(k => form[k] = $("#" + k).value.trim()); return form; };
+  $("#preview").onclick = () => run("Reading the device", async () => {
+    const r = await api("/api/guide/plan", { mac, step: "identity", inputs: collect() });
+    const i = r.inputs;
+    $("#planOut").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
+      <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>
+      ${serialGuard("sure")}<div class="actions"><button class="danger" id="write">Write to device</button></div>`;
+    $("#write").onclick = () => { if (!$("#sure").checked) return alert("Please confirm you are connected to the right device."); run("Writing", async () => {
+      const w = await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
+      const d = await api("/api/guide/device", { mac }); DEV = d.device; DEFAULTS = d.identityDefaults; render(); }); };
+  });
+}
+function viaMedia() {
+  const f = DEV.facts || {};
+  return [f.e1, f.e2].some(x => x && String(x).split("/")[0] === DEV.ip);
+}
+function renderWaiting() {
+  const i = (DEV.inputs || {}).identity || {};
+  $("#writeOut").innerHTML = `<div class="box info"><b>Written.</b> The device is changing to <code>${esc(i.red_ip)}</code> (Red) / <code>${esc(i.blue_ip)}</code> (Blue) and restarts its network.
+    <ol class="how"><li>Connect your computer to the production network, so that it can reach <code>${esc(i.red_ip)}</code>.</li><li>Press <b>Check connection</b>.</li></ol></div>
+    <div class="actions"><button class="primary" id="confirmIp">Check connection</button></div><div id="confOut"></div>`;
+  let timer = null;
+  const check = async (auto) => { try { const r = await api("/api/guide/confirm-identity", { mac });
+      if (r.ok) { clearInterval(timer); const d = await api("/api/guide/device", { mac }); DEV = d.device; DEFAULTS = d.identityDefaults; render(); }
+      else $("#confOut").innerHTML = `<div class="box ${r.waiting ? "info" : "bad"}">${r.waiting ? "Not reachable yet - waiting for the device (this can take a minute)." : "The device answered but something is different: " + esc((r.problems || []).join("; "))}</div>`;
+    } catch (e) { if (!auto) alert(e.message); } };
+  $("#confirmIp").onclick = () => check(false);
+  timer = setInterval(() => { if (!$("#confirmIp")) return clearInterval(timer); check(true); }, 6000);
+}
+
+// ---- step 3 + 4: services, channels
+async function previewStep(step, extraHtml) {
+  const r = await api("/api/guide/plan", { mac, step, inputs: {} });
+  last[step] = r;
+  const out = $("#planOut");
+  const body = step === "channels" && r.summary ? channelsSummaryHtml(r) + `<details><summary class="muted small">Technical details (${r.changes} settings)</summary>${rowsHtml(r.rows, { limit: 300 })}</details>` : rowsHtml(r.rows, { limit: 400 });
+  out.innerHTML = `<h3>This will be written</h3>${body}${extraHtml ? extraHtml(r) : ""}
+    ${r.changes ? serialGuard("sure") + `<div class="actions"><button class="danger" id="write">Write to device</button></div>` : `<div class="actions"><button class="primary" id="markDone">Continue</button></div>`}`;
+  const w = $("#write"); if (w) w.onclick = () => { if (!$("#sure").checked) return alert("Please confirm you are connected to the right device."); applyStep(step); };
+  const m = $("#markDone"); if (m) m.onclick = () => applyStep(step);
+}
+function channelsSummaryHtml(r) {
+  const s = r.summary;
+  const ch = `<table><thead><tr><th>Channel</th><th>Switched on (both legs)</th><th>Off</th></tr></thead><tbody>` + s.channels.map(c =>
+    `<tr><td>CH${String(c.channel).padStart(2, "0")} <span class="muted small">${esc(c.direction)}</span></td><td>${esc(c.on.join(", "))}</td><td class="muted">${esc(c.off.join(", ") || "-")}</td></tr>`).join("") + "</tbody></table>";
+  const sdi = s.sdi.length ? `<h3>Audio on the SDI outputs</h3><table><thead><tr><th>Output</th><th>Audio from</th><th>Embedded audio channels</th></tr></thead><tbody>` + s.sdi.map(o =>
+    o.skipped ? `<tr><td>${esc(o.output)}</td><td class="muted">-</td><td class="muted">no matching channel - left as it is</td></tr>` : `<tr><td>${esc(o.output)}</td><td>${esc(o.from)}</td><td>${o.map.map(esc).join("<br>")}${o.unused ? `<br><span class="muted">${esc(o.unused)}</span>` : ""}</td></tr>`).join("") + "</tbody></table>"
+    : `<div class="box warn">No SDI output of this device could be matched to a channel, so its audio mapping is left unchanged.</div>`;
+  return `<h3 style="margin-top:0">Streams per channel</h3>${ch}${sdi}`;
+}
+function applyStep(step) {
+  return run("Writing and reading back - this can take a minute", async () => {
+    const r = await api("/api/guide/apply", { mac, step, inputs: {}, serial: DEV.facts.serial, confirm: true });
+    const d = await api("/api/guide/device", { mac }); DEV = d.device;
+    $("#planOut").innerHTML = `<div class="box ${r.ok ? "ok" : "bad"}">${r.ok ? "&#10003; Done - every changed value was read back and confirmed." : "Some values were not confirmed. See the list below; you can run this step again."}${r.rebooted ? "<br>The device restarted while applying (expected for some settings)." : ""}</div>
+      <details ${r.ok ? "" : "open"}><summary>Details</summary>${rowsHtml(r.rows, { verify: true, limit: 200 })}</details>
+      <div class="actions">${r.ok ? `<button class="primary" id="nextStep">Next step</button>` : `<button id="again">Run again</button>`}</div>`;
+    $("#main").firstElementChild.outerHTML = stepperHtml(step);
+    const n = $("#nextStep"); if (n) n.onclick = () => go(currentStep());
+    const a = $("#again"); if (a) a.onclick = () => renderDevice();
+  });
+}
+function renderServices() {
+  $("#main").innerHTML = stepperHtml("services") + deviceBar() + `<div class="card"><h2>3. Time &amp; services</h2><p class="why">${esc(STEPS[2].why)}</p>
+    <div class="box info">From the site settings: syslog to <b>${esc(SITE.syslog.server)}:${esc(SITE.syslog.port)}</b>, NMOS registry <b>${esc(SITE.nmos.registry)}</b>, PTP domain <b>${esc(SITE.ptp.domain)}</b> (DSCP ${esc(SITE.ptp.dscp)}), IGMP v${esc(SITE.system.igmp_version)}, ST 2022-7 class ${esc(SITE.system.class_2022_7)}, LLDP receive on. Change them in the Site settings.</div>
+    <div class="actions"><button id="preview">Show what will change</button></div><div id="planOut"></div><span id="busyMsg"></span></div>`;
+  $("#preview").onclick = () => run("Reading the device", () => previewStep("services"));
+}
+function renderChannels() {
+  const a = SITE.audio;
+  $("#main").innerHTML = stepperHtml("channels") + deviceBar() + `<div class="card"><h2>4. Channels &amp; audio</h2><p class="why">${esc(STEPS[3].why)}</p>
+    <div class="box info">Layout from the site settings: on every channel <b>video</b>, <b>${a.streams} audio stream(s) &times; ${a.channels_per_stream} channel(s)</b> and <b>data</b> are switched on, on both legs (primary and secondary, ST 2022-7). Unused audio streams stay off. The audio is mapped in order onto the 16 embedded channels of each SDI output.</div>
+    <p class="muted small">Multicast addresses are not set here: routing (NMOS / the router control system) assigns them. To enter them by hand use <a href="/config">Expert config</a>.</p>
+    <div class="actions"><button id="preview">Show what will change</button></div><div id="planOut"></div><span id="busyMsg"></span></div>`;
+  $("#preview").onclick = () => run("Reading the device", () => previewStep("channels", (r) => r.unsupported ? "" : ""));
+}
+
+// ---- step 5: checks + hand over
+async function renderVerify() {
+  $("#main").innerHTML = stepperHtml("verify") + deviceBar() + `<div class="card"><h2>5. Check &amp; hand over</h2><p class="why">${esc(STEPS[4].why)}</p>
+    <div id="checks"><span class="spin">Checking the device</span></div><span id="busyMsg"></span><div id="finish"></div></div>`;
+  await runChecks();
+}
+async function runChecks() {
+  try {
+    const r = await api("/api/guide/checks", { mac });
+    const failed = r.checks.filter(c => !c.ok);
+    $("#checks").innerHTML = r.checks.map(c => `<div class="check"><div class="i ${c.ok ? "ok" : "bad"}">${c.ok ? "&#10003;" : "&#10007;"}</div><div><b>${esc(c.title)}</b><div class="small muted">${esc(c.detail)}</div>${c.hint ? `<div class="small bad">${esc(c.hint)}</div>` : ""}</div></div>`).join("");
+    const done = stepStatus("verify") === "done";
+    $("#finish").innerHTML = done ? `<div class="box ok">&#10003; This device is in monitoring.</div><div class="actions"><a class="btn primary" href="/">Open the dashboard</a><button id="home">Set up another</button></div>` :
+      `<div class="box ${failed.length ? "warn" : "ok"}">${failed.length ? failed.length + " check(s) failed. Fix them and check again, or add the device anyway." : "All checks passed."}</div>
+      ${failed.length ? `<label style="font-weight:400"><input type="checkbox" id="ack"> Add it to monitoring anyway</label>` : ""}
+      <div class="actions"><button id="recheck">Check again</button><button class="primary" id="handOver">Add to monitoring</button></div>`;
+    const h = $("#home"); if (h) h.onclick = () => { view = "home"; mac = null; DEV = null; render(); };
+    const rc = $("#recheck"); if (rc) rc.onclick = () => run("Checking", runChecks);
+    const ho = $("#handOver"); if (ho) ho.onclick = () => run("Adding to the dashboard", async () => {
+      const x = await api("/api/guide/hand-over", { mac, acknowledge: !!($("#ack") && $("#ack").checked) });
+      if (x.needsAck) return alert("Some checks failed. Tick 'Add it to monitoring anyway' if you want to continue.");
+      const d = await api("/api/guide/device", { mac }); DEV = d.device; renderVerify(); });
+  } catch (e) { $("#checks").innerHTML = `<div class="box bad">${esc(e.message)}</div>`; }
+}
+
+// ------------------------------------------------------------------ start
+$("#btnHome").onclick = () => { view = "home"; mac = null; DEV = null; render(); };
+$("#btnSite").onclick = () => { view = "site"; render(); };
+(async function init() {
+  const s = await api("/api/guide/site");
+  SITE = s.site; STEPS = s.steps;
+  let m = ""; try { m = localStorage.getItem("guide.mac") || ""; } catch (e) {}
+  if (m) { try { await openDevice(m); return; } catch (e) {} }
+  render();
+})().catch(e => { $("#main").innerHTML = `<div class="card bad">${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>

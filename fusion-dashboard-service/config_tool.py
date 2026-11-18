@@ -592,6 +592,7 @@ LOGIN_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 </style></head><body><form method="post" action="/config/login">
 <h1>Device Config</h1><p>Writes configuration to broadcast devices. Password required.</p>
 <input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
+<input type="hidden" name="next" value="__NEXT__">
 <button type="submit">Log in</button>__ERROR__</form></body></html>"""
 
 NO_PASSWORD_PAGE = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Device Config</title></head>
@@ -622,6 +623,10 @@ def public_read(r):
         "current": current_values(r),
     }
 
+
+
+def login_html(error_html="", nxt=""):
+    return LOGIN_PAGE.replace("__ERROR__", error_html).replace("__NEXT__", nxt)
 
 
 class ConfigRoutes:
@@ -683,7 +688,8 @@ class ConfigRoutes:
         elif path.startswith("/api/"):
             self._cfg_json({"ok": False, "error": "login required", "login": True}, 401)
         else:
-            self._cfg_redirect("/config/login")
+            where = path if path in ("/guide",) else "/config"
+            self._cfg_redirect("/config/login" + ("?next=" + where if where != "/config" else ""))
 
     def _cfg_login_post(self):
         client = self.client_address[0]
@@ -691,18 +697,19 @@ class ConfigRoutes:
         form = parse_qs(self.rfile.read(length).decode("utf-8", "replace"))
         wait = login_delay(client)
         if wait:
-            self._cfg_html(LOGIN_PAGE.replace("__ERROR__", f'<p class="err">Too many attempts - wait {wait} s.</p>'), 429)
+            self._cfg_html(login_html(f'<p class="err">Too many attempts - wait {wait} s.</p>'), 429)
             return
         if password_configured() and check_password((form.get("password") or [""])[0]):
             FAILED_LOGINS.pop(client, None)
             logger.warning("config login from %s", client)
             cookie = f"{SESSION_COOKIE}={new_session()}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_TTL_SEC}"
-            self._cfg_redirect("/config", {"Set-Cookie": cookie})
+            nxt = (form.get("next") or [""])[0]
+            self._cfg_redirect(nxt if nxt in ("/guide",) else "/config", {"Set-Cookie": cookie})
             return
         count, _ = FAILED_LOGINS.get(client, (0, 0))
         FAILED_LOGINS[client] = (count + 1, time.time())
         logger.warning("failed config login from %s (%d)", client, count + 1)
-        self._cfg_html(LOGIN_PAGE.replace("__ERROR__", '<p class="err">Wrong password.</p>'), 401)
+        self._cfg_html(login_html('<p class="err">Wrong password.</p>', (form.get("next") or [""])[0] if (form.get("next") or [""])[0] in ("/guide",) else ""), 401)
 
     def config_get(self):
         path = self.path.split("?")[0]
@@ -712,7 +719,9 @@ class ConfigRoutes:
             if not password_configured():
                 self._cfg_redirect("/config")
             else:
-                self._cfg_html(LOGIN_PAGE.replace("__ERROR__", ""))
+                nxt = (self.path.partition("?next=")[2] or "")
+                nxt = nxt if nxt in ("/guide",) else ""
+                self._cfg_html(login_html("", nxt))
             return True
         if path == "/config/logout":
             with AUTH_LOCK:

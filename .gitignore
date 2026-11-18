@@ -8,3 +8,5 @@ fusion-dashboard-service/auth.json
 fusion-dashboard-service/config-backups/
 fusion-dashboard-service/config-profiles/*.json
 !fusion-dashboard-service/config-profiles/*.example.json
+fusion-dashboard-service/guide-site.json
+fusion-dashboard-service/guide-state.json

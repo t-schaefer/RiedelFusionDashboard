@@ -40,6 +40,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import config_tool
+import guide_tool
 
 BASE_DIR = Path(__file__).resolve().parent
 DEVICES_FILE = BASE_DIR / "devices.json"
@@ -138,6 +139,25 @@ def init_state():
                 "configFetchedAt": None,
                 "configError": None,
             }
+
+
+def add_device(ip, name="", tag=""):
+    """Adds a device to the live state and devices.json (if new) and starts its
+    first config fetch and health poll. Used by "+ Device" and the guided setup."""
+    with STATE_LOCK:
+        if ip not in STATE:
+            STATE[ip] = {
+                "ip": ip, "name": name, "tag": tag, "status": "unknown",
+                "lastError": None, "lastPollAt": None, "health": None,
+                "activeNetwork": None,
+                "config": None, "configFetchedAt": None, "configError": None,
+            }
+        devices = load_devices()
+        if not any(d["ip"] == ip for d in devices):
+            devices.append({"ip": ip, "name": name, "tag": tag})
+            save_devices(devices)
+    threading.Thread(target=fetch_device_config, args=(ip,), daemon=True).start()
+    threading.Thread(target=poll_device_health, args=(ip,), daemon=True).start()
 
 
 def http_get_json(ip, path, timeout):
@@ -970,7 +990,7 @@ def state_payload():
         return _state_cache["raw"], _state_cache["gz"]
 
 
-class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
+class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if args and str(args[0]).startswith("GET /api/state"):
             return      # polled every 4s by every open tab - would flood service.log
@@ -985,7 +1005,7 @@ class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.config_get():       # /config, /config/login|logout, /api/config/* (password protected)
+        if self.config_get() or self.guide_get():   # /config*, /guide, /api/config/*, /api/guide/* (password protected)
             return
         if self.path == "/" or self.path == "/index.html":
             try:
@@ -1051,7 +1071,7 @@ class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.config_post():
+        if self.config_post() or self.guide_post():
             return
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b"{}"
@@ -1066,22 +1086,7 @@ class Handler(config_tool.ConfigRoutes, BaseHTTPRequestHandler):
             if not ip:
                 self._send_json({"error": "ip is required"}, 400)
                 return
-            name = (data.get("name") or "").strip()
-            tag = (data.get("tag") or "").strip()
-            with STATE_LOCK:
-                if ip not in STATE:
-                    STATE[ip] = {
-                        "ip": ip, "name": name, "tag": tag, "status": "unknown",
-                        "lastError": None, "lastPollAt": None, "health": None,
-                        "activeNetwork": None,
-                        "config": None, "configFetchedAt": None, "configError": None,
-                    }
-                devices = load_devices()
-                if not any(d["ip"] == ip for d in devices):
-                    devices.append({"ip": ip, "name": name, "tag": tag})
-                    save_devices(devices)
-            threading.Thread(target=fetch_device_config, args=(ip,), daemon=True).start()
-            threading.Thread(target=poll_device_health, args=(ip,), daemon=True).start()
+            add_device(ip, (data.get("name") or "").strip(), (data.get("tag") or "").strip())
             self._send_json({"ok": True})
         elif self.path == "/api/devices/delete":
             ip = (data.get("ip") or "").strip()
@@ -1329,6 +1334,7 @@ def main():
         set_config_password()
         return
     config_tool.init(load_devices)
+    guide_tool.init(add_device, load_devices)
     init_state()
     threading.Thread(target=config_refresh_loop, daemon=True).start()
     threading.Thread(target=health_poll_loop, daemon=True).start()
