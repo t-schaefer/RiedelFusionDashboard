@@ -46,6 +46,9 @@
   details { margin-top: 12px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .spin::after { content: ""; display: inline-block; width: 12px; height: 12px; margin-left: 8px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
   @keyframes sp { to { transform: rotate(360deg); } }
+.errbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; max-width: min(720px, calc(100vw - 32px)); display: flex; gap: 12px; align-items: flex-start;
+  background: var(--bad-soft); color: var(--text); border: 1px solid var(--bad-strong); border-radius: 10px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.errbar button { padding: 0 8px; font-size: 18px; line-height: 1.2; }
 </style>
 </head>
 <body>
@@ -85,7 +88,15 @@ function setBusy(on, msg) {
   const b = $("#busyMsg"); if (b) b.innerHTML = on ? `<span class="spin">${esc(msg || "Working")}</span>` : "";
   document.querySelectorAll("main button").forEach(x => { if (on) x.dataset.was = x.disabled ? "1" : "0"; x.disabled = on ? true : x.dataset.was === "1"; });
 }
-async function run(msg, fn) { setBusy(true, msg); try { await fn(); } catch (e) { alert(e.message); } finally { setBusy(false); } }
+// Errors are shown in a bar on the page (not alert(): pop-ups are blocked or invisible in some browsers).
+function showError(msg) {
+  let b = $("#errBar");
+  if (!b) { b = document.createElement("div"); b.id = "errBar"; b.className = "errbar"; document.body.appendChild(b); }
+  b.innerHTML = `<span>${esc(msg)}</span><button class="ghost" id="errX" title="Dismiss">&times;</button>`;
+  $("#errX").onclick = clearError; b.scrollIntoView({ block: "nearest" });
+}
+function clearError() { const b = $("#errBar"); if (b) b.remove(); }
+async function run(msg, fn) { clearError(); setBusy(true, msg); try { await fn(); } catch (e) { showError(e.message); } finally { setBusy(false); } }
 async function reloadDevice() { const d = await api("/api/guide/device", { mac }); DEV = d.device; DEFAULTS = d.identityDefaults; }
 
 // ------------------------------------------------------------------ shell
@@ -229,18 +240,29 @@ function bodyConnect() {
       <div style="flex:0 0 auto;align-self:end"><button class="primary" id="doConnect">Connect and read</button></div></div>
     <div id="connOut">${connected ? factsHtml(DEV) : ""}</div>`;
   const fd = $("#fillDemo"); if (fd) fd.onclick = () => { $("#macIn").value = MODE.hints.mac; $("#calc").click(); };
-  $("#calc").onclick = () => run("Calculating", async () => {
-    const r = await api("/api/guide/factory", { mac: $("#macIn").value });
-    $("#ipIn").value = r.oob;
+  const showFactory = (r) => {
     $("#factoryOut").innerHTML = `<div class="box info"><b>OOB port (recommended):</b> <code>${esc(r.oob)}/${r.oob_prefix}</code><br>
       <b>Media ports:</b> <code>${esc(r.media)}</code><ol class="how">
       <li>Connect your computer with a cable to the <b>OOB</b> port of the device.</li>
       <li>Set your computer's network adapter to <code>${esc(r.laptop_oob)}</code> with subnet mask <code>255.0.0.0</code>.</li>
       <li>Power the device on, wait about a minute, then press <b>Connect and read</b>.</li></ol>
       <div class="small muted">${r.notes.map(esc).join("<br>")}</div></div>`;
+  };
+  $("#calc").onclick = () => run("Calculating", async () => {
+    const r = await api("/api/guide/factory", { mac: $("#macIn").value });
+    $("#ipIn").value = r.oob; showFactory(r);
   });
   $("#doConnect").onclick = () => run("Connecting and reading the device", async () => {
-    const r = await api("/api/guide/connect", { ip: $("#ipIn").value });
+    let ip = $("#ipIn").value.trim(), tries = [];
+    if (!ip) {                       // only the MAC was given: work out the factory address(es) and try them
+      const m = $("#macIn").value.trim();
+      if (!m) throw new Error("Enter the MAC address from the label (and press 'Show me the address'), or type the address the device already has.");
+      const f = await api("/api/guide/factory", { mac: m });
+      showFactory(f); tries = [f.oob, f.media];
+    } else tries = [ip];
+    let r = null, last = null;
+    for (const t of tries) { try { $("#ipIn").value = t; r = await api("/api/guide/connect", { ip: t }); break; } catch (e) { last = e; } }
+    if (!r) throw last;
     mac = r.device.mac; remember(); await reloadDevice(); renderDevice();
   });
 }
@@ -292,7 +314,7 @@ function bodyIdentity() {
     $("#planOut2").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
       <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>
       ${serialGuard("sure")}<div class="actions"><button class="danger" id="write">Write to device</button></div>`;
-    $("#write").onclick = () => { if (!$("#sure").checked) return alert("Please confirm you are connected to the right device."); run("Writing", async () => {
+    $("#write").onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); run("Writing", async () => {
       await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
       await reloadDevice(); renderDevice(); }); };
   });
@@ -307,7 +329,7 @@ function renderWaiting() {
   const check = async (auto) => { try { const r = await api("/api/guide/confirm-identity", { mac });
       if (r.ok) { clearInterval(timer); await reloadDevice(); curStep = "identity"; renderDevice(); }
       else $("#confOut").innerHTML = `<div class="box ${r.waiting ? "info" : "bad"}">${r.waiting ? "Not reachable yet - waiting for the device (this can take a minute)." : "The device answered but something is different: " + esc((r.problems || []).join("; "))}</div>`;
-    } catch (e) { if (!auto) alert(e.message); } };
+    } catch (e) { if (!auto) showError(e.message); } };
   $("#confirmIp").onclick = () => check(false);
   timer = setInterval(() => { if (!$("#confirmIp")) return clearInterval(timer); check(true); }, 6000);
 }
@@ -318,7 +340,7 @@ async function previewStep(step) {
   const body = step === "channels" && r.summary ? channelsSummaryHtml(r) + `<details><summary>Technical details (${r.changes} settings)</summary>${rowsHtml(r.rows, { limit: 300 })}</details>` : rowsHtml(r.rows);
   $("#planOut").innerHTML = `<h3>This will be written</h3>${body}` +
     (r.changes ? serialGuard("sure") + `<div class="actions"><button class="danger" id="write">Write to device</button></div>` : `<div class="actions"><button class="primary" id="markDone">Mark step as done</button></div>`);
-  const w = $("#write"); if (w) w.onclick = () => { if (!$("#sure").checked) return alert("Please confirm you are connected to the right device."); applyStep(step); };
+  const w = $("#write"); if (w) w.onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); applyStep(step); };
   const m = $("#markDone"); if (m) m.onclick = () => applyStep(step);
 }
 function channelsSummaryHtml(r) {
@@ -388,7 +410,7 @@ async function runChecks() {
     const rc = $("#recheck"); if (rc) rc.onclick = () => run("Checking", runChecks);
     const ho = $("#handOver"); if (ho) ho.onclick = () => run("Adding to the dashboard", async () => {
       const x = await api("/api/guide/hand-over", { mac, acknowledge: !!($("#ack") && $("#ack").checked) });
-      if (x.needsAck) return alert("Some checks failed. Tick 'Add it to monitoring anyway' if you want to continue.");
+      if (x.needsAck) return showError("Some checks failed. Tick 'Add it to monitoring anyway' if you want to continue.");
       await reloadDevice(); renderDevice(); });
   } catch (e) { $("#checks").innerHTML = `<div class="box bad">${esc(e.message)}</div>`; }
 }
