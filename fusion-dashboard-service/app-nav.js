@@ -12,7 +12,7 @@
       h += '<a class="nl" target="_blank" rel="noopener" href="' + esc(l.url.replace("{host}", location.hostname)) + '">' + esc(l.label) + "</a>";
     });
     h += '<span class="sp"></span>';
-    if (mode.demo) h += '<span class="pill" title="Simulated devices - nothing real is touched">DEMO</span>';
+    if (mode.demo) h += '<span class="pill" title="Simulated devices - nothing real is touched' + (mode.resetMinutes ? ". The demo starts over about every " + mode.resetMinutes + " minutes." : "") + '">DEMO</span>';
     if (mode.auth && (path === "/config" || path === "/guide")) h += '<a class="out" href="/config/logout">Log out</a>';
     host.innerHTML = h + "</nav>";
   }

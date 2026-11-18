@@ -1,0 +1,26 @@
+# docker compose -f deploy/docker-compose.yml up -d --build
+# DEMO_HOST = the public name, e.g. demo.example.com (DNS A record -> this server's IPv4).
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always                 # also what turns the 30-minute reset into a fresh demo
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    networks: [web]                 # reachable only through Caddy, no published port
+  caddy:
+    image: caddy:2
+    restart: always
+    ports: ["80:80", "443:443"]
+    environment:
+      DEMO_HOST: ${DEMO_HOST:?set DEMO_HOST, e.g. demo.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+    networks: [web]
+networks:
+  web: {}
+volumes:
+  caddy_data: {}

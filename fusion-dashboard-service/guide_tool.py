@@ -38,6 +38,7 @@ UI_FILE = BASE_DIR / "guide.html"
 logger = logging.getLogger("fusion-dashboard")
 LOCK = threading.RLock()
 
+FORCE_LOCAL = False        # demo: pretend the server is the engineer's own laptop
 _add_device = lambda ip, name, tag: None
 _device_list = lambda: []
 
@@ -886,7 +887,7 @@ class GuideRoutes:
         if p == "/api/guide/scan":
             return {"ok": True, **scan(d.get("network"))}
         if p == "/api/guide/netcheck":
-            local = self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+            local = FORCE_LOCAL or self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
             return {"ok": True, **host_network(str(d.get("ip") or ""), d.get("prefix"), local)}
         if p == "/api/guide/connect":
             return {"ok": True, "device": connect(d.get("ip"))}

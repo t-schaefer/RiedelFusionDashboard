@@ -283,6 +283,8 @@ def fake_post(ip, path, payload):
 def install(server=None):
     """Route the service's device calls to the fake devices."""
     ct.http_get, ct.http_post = fake_get, fake_post
+    guide_tool.FORCE_LOCAL = True
+    guide_tool.host_interfaces = lambda: [{"name": "en0", "ip": "192.168.1.23", "prefix": 24}]   # never show the real host's interfaces
     guide_tool._tcp_open = lambda ip, *a, **k: ip in REGISTRY      # the address scan sees only simulated devices
     if server is not None:
         strip = lambda path: re.sub(r"^/emsfp/node/v1/", "", path)

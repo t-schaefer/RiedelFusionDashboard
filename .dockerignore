@@ -1,0 +1,15 @@
+.git
+**/__pycache__
+fusion-dashboard-service/devices.json
+fusion-dashboard-service/devices.seeded.json
+fusion-dashboard-service/auth.json
+fusion-dashboard-service/config-backups
+fusion-dashboard-service/guide-*.json
+fusion-dashboard-service/demo-data
+fusion-dashboard-service/service.log*
+fusion-dashboard-service/config-profiles/*.json
+!fusion-dashboard-service/config-profiles/*.example.json
+# real fleet data (device IPs/tags, studio channel names) must never be in the public demo image
+fusion-dashboard-service/devices.example.json
+fusion-dashboard-service/channel-names.json
+fusion-dashboard-service/service.log*

@@ -22,11 +22,13 @@ Polling design (why it's built this way - matters at 100+ devices):
   much slower interval than health, since it rarely changes.
 """
 
+import collections
 import gzip
 import ipaddress
 import json
 import logging
 import logging.handlers
+import os
 import re
 import sys
 import threading
@@ -994,6 +996,8 @@ DEMO = False   # set by --demo: simulated devices, nothing real is touched
 DEMO_HINTS = {}
 GROUP_RULES = None   # optional [{"re": "^Studio A", "label": "Studio A"}, ...]; None = the dashboard's built-in rules
 # Extra links in the top navigation (not in demo mode). {host} = the host the page was opened on.
+RATE_LIMIT, RATE_HITS, RATE_LOCK = 600, {}, threading.Lock()     # requests per minute per visitor (demo mode)
+RESET_MINUTES = 0                                                  # demo: exit after this many minutes (the container restarts it fresh)
 EXTRA_LINKS = [{"label": "MN SET", "url": "http://{host}:8080/"}]
 STATIC_FILES = {"/app.css": ("app.css", "text/css; charset=utf-8"), "/app-nav.js": ("app-nav.js", "application/javascript; charset=utf-8")}
 
@@ -1012,7 +1016,28 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
         self.end_headers()
         self.wfile.write(body)
 
+    def _throttled(self):
+        """Public demo only: at most RATE_LIMIT requests per minute per visitor (behind a proxy: X-Forwarded-For)."""
+        if not DEMO:
+            return False
+        who = (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip()
+        now = time.time()
+        with RATE_LOCK:
+            q = RATE_HITS.setdefault(who, collections.deque())
+            while q and now - q[0] > 60:
+                q.popleft()
+            q.append(now)
+            if len(RATE_HITS) > 5000:
+                for k in [k for k, v in RATE_HITS.items() if not v or now - v[-1] > 60]:
+                    RATE_HITS.pop(k, None)
+            over = len(q) > RATE_LIMIT
+        if over:
+            self._send_json({"ok": False, "error": "Too many requests - please slow down a little."}, 429)
+        return over
+
     def do_GET(self):
+        if self._throttled():
+            return
         if self.config_get() or self.guide_get():   # /config*, /guide, /api/config/*, /api/guide/* (password protected)
             return
         if self.path == "/" or self.path == "/index.html":
@@ -1037,7 +1062,7 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/mode":
-            self._send_json({"demo": DEMO, "links": [] if DEMO else EXTRA_LINKS, "auth": config_tool.password_configured() and not DEMO, "hints": DEMO_HINTS if DEMO else None, "groups": GROUP_RULES})
+            self._send_json({"demo": DEMO, "links": [] if DEMO else EXTRA_LINKS, "auth": config_tool.password_configured() and not DEMO, "hints": DEMO_HINTS if DEMO else None, "groups": GROUP_RULES, "resetMinutes": RESET_MINUTES if DEMO else 0})
         elif self.path == "/api/state":
             raw, gz = state_payload()
             use_gz = "gzip" in self.headers.get("Accept-Encoding", "")
@@ -1090,6 +1115,8 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
             self.send_error(404)
 
     def do_POST(self):
+        if self._throttled():
+            return
         if self.config_post() or self.guide_post():
             return
         length = int(self.headers.get("Content-Length", 0))
@@ -1353,6 +1380,9 @@ def main():
         set_config_password()
         return
     demo = "--demo" in sys.argv
+    global RESET_MINUTES
+    if "--reset-every" in sys.argv:
+        RESET_MINUTES = int(sys.argv[sys.argv.index("--reset-every") + 1])
     if demo:
         import demo_fleet
         demo_fleet.prepare(sys.modules[__name__])
@@ -1369,6 +1399,12 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     if demo:
         demo_fleet.seed(lambda m: logger.info(m))
+        if RESET_MINUTES > 0:
+            def _reset():
+                time.sleep(RESET_MINUTES * 60)
+                logger.info("demo: scheduled reset - exiting so that the supervisor starts a fresh demo")
+                os._exit(0)
+            threading.Thread(target=_reset, daemon=True).start()
     logger.info("Fusion Dashboard service listening on http://%s:%d/", HOST, PORT)
     try:
         server.serve_forever()

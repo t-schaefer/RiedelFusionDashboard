@@ -15,3 +15,5 @@ Next:
 4. **"What to do" hints** on dashboard warnings, linking to the matching guide step.
 5. Transmit (encapsulator) channel templates and multicast address allocation per site.
 6. Group the devices of the Config page by the dashboard's groups.
+
+- Public demo: per-visitor simulated fleet (today all visitors share one state and it resets every 30 min); packaged local program (one executable for Windows / macOS) for engineers.
