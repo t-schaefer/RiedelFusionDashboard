@@ -49,6 +49,11 @@
 .errbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; max-width: min(720px, calc(100vw - 32px)); display: flex; gap: 12px; align-items: flex-start;
   background: var(--bad-soft); color: var(--text); border: 1px solid var(--bad-strong); border-radius: 10px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
 .errbar button { padding: 0 8px; font-size: 18px; line-height: 1.2; }
+pre.cmd { margin: 4px 0 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font-size: 13px; user-select: all; }
+.choices { display: grid; gap: 8px; margin: 6px 0 14px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--panel-2); }
+.choice.on { border-color: var(--accent); background: var(--accent-soft); }
+.choice input { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -103,7 +108,7 @@ async function reloadDevice() { const d = await api("/api/guide/device", { mac }
 function subbar() {
   const on = (v) => view === v ? "on" : "";
   $("#subbar").innerHTML = `<span class="crumb">Guided setup</span><button class="${on("home")}" id="sbHome">Devices</button><button class="${on("site")}" id="sbSite">Site settings</button>` +
-    (view === "device" && DEV ? `<span class="crumb">&rsaquo; ${esc(DEV.name || (DEV.facts || {}).hostname || DEV.mac)}</span>` : "");
+    (view === "device" ? `<span class="crumb">&rsaquo; ${esc(DEV ? (DEV.name || (DEV.facts || {}).hostname || DEV.mac) : "New device")}</span>` : "");
   $("#sbHome").onclick = () => { view = "home"; mac = null; DEV = null; curStep = null; render(); };
   $("#sbSite").onclick = () => { siteReturn = view === "device" ? "device" : "home"; view = "site"; render(); };
 }
@@ -221,50 +226,108 @@ function wireNav(id) {
 function renderDevice() {
   const id = curStep || currentStep();
   const st = STEPS.find(s => s.id === id);
-  $("#main").innerHTML = stepperHtml(id) + deviceBar() + `<div class="card"><h2>${stepNo(id)}. ${esc(st.title)}</h2><p class="why">${esc(st.why)}</p>${banner(id)}<div id="stepBody"></div><div id="planOut">${RESULT[id] || ""}</div>${navRow(id)}</div>`;
+  $("#main").innerHTML = stepperHtml(id) + deviceBar() + `<div class="card"><h2>${stepNo(id)}. ${esc(id === "connect" && !DEV ? "Connect a new device" : st.title)}</h2><p class="why">${esc(st.why)}</p>${banner(id)}<div id="stepBody"></div><div id="planOut">${RESULT[id] || ""}</div>${navRow(id)}</div>`;
   ({ connect: bodyConnect, identity: bodyIdentity, services: bodyServices, channels: bodyChannels, verify: bodyVerify }[id])();
   wireNav(id); subbar();
 }
 
 // ---- step 1: connect
+let connMode = "factory";
 function bodyConnect() {
   const connected = DEV && stepStatus("connect") === "done";
   const hint = MODE.demo ? `<div class="box info small"><b>Demo:</b> the simulated factory unit has the MAC <span class="mono">${esc((MODE.hints || {}).mac)}</span>. <button class="ghost" id="fillDemo">Fill it in</button></div>` : "";
-  $("#stepBody").innerHTML = `${hint}<h3>A factory-fresh unit</h3>
-    <p class="small muted">A new Fusion gets its address from the MAC address printed on its label (first media port, slot 3).</p>
-    <div class="row"><div><label>MAC address from the label</label><input type="text" id="macIn" placeholder="40:A3:6B:A2:16:14"></div>
-      <div style="flex:0 0 auto;align-self:end"><button id="calc">Show me the address</button></div></div>
-    <div id="factoryOut"></div>
-    <h3>Connect</h3>
-    <div class="row"><div><label>Device address <span class="hint">(or any address it already has)</span></label><input type="text" id="ipIn" value="${esc(DEV ? DEV.ip : "")}" placeholder="11.162.22.20"></div>
-      <div style="flex:0 0 auto;align-self:end"><button class="primary" id="doConnect">Connect and read</button></div></div>
-    <div id="connOut">${connected ? factsHtml(DEV) : ""}</div>`;
-  const fd = $("#fillDemo"); if (fd) fd.onclick = () => { $("#macIn").value = MODE.hints.mac; $("#calc").click(); };
+  const modes = [["factory", "Brand new (factory settings)", "I only know the MAC address on the label."],
+                 ["known", "It already has an address", "I know it - to check the device or only change its address."],
+                 ["unknown", "It has an address, but I don't know it", "Search for it in the network."]];
+  const choose = `<div class="choices">` + modes.map(([id, t, d]) => `<label class="choice ${connMode === id ? "on" : ""}"><input type="radio" name="cm" value="${id}" ${connMode === id ? "checked" : ""}><span><b>${t}</b><br><span class="small muted">${d}</span></span></label>`).join("") + `</div>`;
+  const panel = {
+    factory: `<p class="small muted">A new Fusion gets its address from the MAC address printed on its label (first media port, slot 3).</p>
+      <div class="row"><div><label>MAC address from the label</label><input type="text" id="macIn" placeholder="40:A3:6B:A2:16:14"></div>
+        <div style="flex:0 0 auto;align-self:end"><button id="calc">Show me the address</button></div></div>
+      <div id="factoryOut"></div>`,
+    known: `<p class="small muted">Connect to the address the device answers on today. Afterwards, step 2 lets you change its name and addresses; the device keeps everything else unless you continue with steps 3 and 4.</p>`,
+    unknown: `<p class="small muted">Searches one network (read only, at most 512 addresses) for Fusion / MuoN devices. Choose the network your computer shares with the device.</p>
+      <div class="row"><div><label>Network to search</label><input type="text" id="scanNet" placeholder="10.20.1.0/24"></div>
+        <div style="flex:0 0 auto;align-self:end"><button id="doScan">Search</button></div></div><div id="scanOut"></div>
+      <p class="small muted">Tip: if it was never configured, choose <i>Brand new</i> and use the MAC address instead.</p>`,
+  }[connMode];
+  const netBox = `<div class="actions"><button id="chkNet" class="ghost">Check this computer's network</button><span class="small muted">Can this computer reach the device? Shows what to set if not.</span></div><div id="netOut"></div>`;
+  const addr = connMode === "unknown" ? netBox : `<h3>Connect</h3>
+    <div class="row"><div><label>Device address ${connMode === "factory" ? '<span class="hint">(filled in from the MAC)</span>' : ""}</label><input type="text" id="ipIn" value="${esc(DEV ? DEV.ip : "")}" placeholder="${connMode === "factory" ? "from the MAC" : "10.20.1.11"}"></div>
+      <div style="flex:0 0 auto;align-self:end"><button class="primary" id="doConnect">Connect and read</button></div></div>${netBox}`;
+  $("#stepBody").innerHTML = `${hint}<h3>What is the situation?</h3>${choose}${panel}${addr}<div id="connOut">${connected ? factsHtml(DEV) : ""}</div>`;
+  document.querySelectorAll('input[name="cm"]').forEach(r => r.onchange = () => { connMode = r.value; clearError(); bodyConnect(); });
+  const fd = $("#fillDemo"); if (fd) fd.onclick = () => { connMode = "factory"; bodyConnect(); $("#macIn").value = MODE.hints.mac; $("#calc").click(); };
   const showFactory = (r) => {
-    $("#factoryOut").innerHTML = `<div class="box info"><b>OOB port (recommended):</b> <code>${esc(r.oob)}/${r.oob_prefix}</code><br>
+    const out = $("#factoryOut"); if (!out) return;
+    out.innerHTML = `<div class="box info"><b>OOB port (recommended):</b> <code>${esc(r.oob)}/${r.oob_prefix}</code><br>
       <b>Media ports:</b> <code>${esc(r.media)}</code><ol class="how">
       <li>Connect your computer with a cable to the <b>OOB</b> port of the device.</li>
-      <li>Set your computer's network adapter to <code>${esc(r.laptop_oob)}</code> with subnet mask <code>255.0.0.0</code>.</li>
+      <li>Set your computer's network adapter to <code>${esc(r.laptop_oob)}</code> with subnet mask <code>255.0.0.0</code> (the check below shows how).</li>
       <li>Power the device on, wait about a minute, then press <b>Connect and read</b>.</li></ol>
       <div class="small muted">${r.notes.map(esc).join("<br>")}</div></div>`;
   };
-  $("#calc").onclick = () => run("Calculating", async () => {
+  const chk = $("#chkNet"); if (chk) chk.onclick = () => run("Checking the network of this computer", async () => {
+    let target, mine = null;
+    if (connMode === "unknown") { target = ($("#scanNet").value || "").split("/")[0].trim(); if (!target) throw new Error("Enter the network to search first."); }
+    else {
+      target = ($("#ipIn").value || "").trim();
+      if (!target && connMode === "factory") { const f = await api("/api/guide/factory", { mac: $("#macIn").value }); showFactory(f); target = f.oob; $("#ipIn").value = target; }
+      if (!target) throw new Error("Enter the address of the device first.");
+    }
+    const n = await api("/api/guide/netcheck", { ip: target });
+    const factory = /^11\./.test(target) && connMode === "factory";
+    const p = factory ? 8 : 24, parts = target.split("."), last = +parts[3] === 250 ? 249 : 250;
+    const my = factory ? "11.0.0.1" : parts.slice(0, 3).join(".") + "." + last;
+    $("#netOut").innerHTML = netHtml(n, target, my, p);
+    const i = $("#ifName"), a = $("#myAddr"), upd = () => { $("#netCmds").innerHTML = netCmds(n.system, i.value.trim(), a.value.trim(), p); };
+    if (i) { i.oninput = upd; a.oninput = upd; }
+  });
+  const connectTo = async (ip) => { const r = await api("/api/guide/connect", { ip }); mac = r.device.mac; remember(); await reloadDevice(); renderDevice(); };
+  const calc = $("#calc"); if (calc) calc.onclick = () => run("Calculating", async () => {
     const r = await api("/api/guide/factory", { mac: $("#macIn").value });
     $("#ipIn").value = r.oob; showFactory(r);
   });
-  $("#doConnect").onclick = () => run("Connecting and reading the device", async () => {
-    let ip = $("#ipIn").value.trim(), tries = [];
-    if (!ip) {                       // only the MAC was given: work out the factory address(es) and try them
-      const m = $("#macIn").value.trim();
-      if (!m) throw new Error("Enter the MAC address from the label (and press 'Show me the address'), or type the address the device already has.");
-      const f = await api("/api/guide/factory", { mac: m });
-      showFactory(f); tries = [f.oob, f.media];
-    } else tries = [ip];
-    let r = null, last = null;
-    for (const t of tries) { try { $("#ipIn").value = t; r = await api("/api/guide/connect", { ip: t }); break; } catch (e) { last = e; } }
-    if (!r) throw last;
-    mac = r.device.mac; remember(); await reloadDevice(); renderDevice();
+  const sc = $("#doScan"); if (sc) sc.onclick = () => run("Searching the network - this can take up to a minute", async () => {
+    const r = await api("/api/guide/scan", { network: $("#scanNet").value });
+    $("#scanOut").innerHTML = r.found.length ? `<table><thead><tr><th>Address</th><th>Type</th><th>Name</th><th>Serial</th><th></th></tr></thead><tbody>` + r.found.map(f =>
+      `<tr><td class="mono">${esc(f.ip)}</td><td>${esc(f.type)}</td><td>${esc(f.hostname || "-")}</td><td class="mono">${esc(f.serial)}</td><td>${f.inDashboard ? '<span class="muted small">already monitored</span>' : `<button class="primary" data-use="${esc(f.ip)}">Use this one</button>`}</td></tr>`).join("") + `</tbody></table>`
+      : `<div class="box warn">No device found in ${esc(r.network)} (${r.scanned} addresses checked). Check the cable and that your computer has an address in that network, or try another network.</div>`;
+    document.querySelectorAll("[data-use]").forEach(b => b.onclick = () => run("Connecting and reading the device", () => connectTo(b.dataset.use)));
   });
+  const dc = $("#doConnect"); if (dc) dc.onclick = () => run("Connecting and reading the device", async () => {
+    let tries;
+    const ip = $("#ipIn").value.trim();
+    if (ip) tries = [ip];
+    else if (connMode === "factory") {   // only the MAC was given: work out the factory address(es) and try both
+      const m = $("#macIn").value.trim();
+      if (!m) throw new Error("Enter the MAC address from the label, or choose 'It already has an address' and type that address.");
+      const f = await api("/api/guide/factory", { mac: m }); showFactory(f); tries = [f.oob, f.media];
+    } else throw new Error("Enter the address of the device.");
+    let last = null;
+    for (const t of tries) { try { $("#ipIn").value = t; await connectTo(t); return; } catch (e) { last = e; } }
+    throw last;
+  });
+}
+function maskOf(p) { const m = []; for (let k = 0; k < 4; k++) { const b = Math.max(0, Math.min(8, p - 8 * k)); m.push(256 - Math.pow(2, 8 - b)); } return m.join("."); }
+function netCmds(sys, ifn, addr, p) {
+  const n = ifn || "<interface>", a = addr || "<address>";
+  const c = sys === "Windows" ? [`New-NetIPAddress -InterfaceAlias "${n}" -IPAddress ${a} -PrefixLength ${p}`, `Remove-NetIPAddress -InterfaceAlias "${n}" -IPAddress ${a} -Confirm:$false`, "PowerShell as Administrator"]
+    : sys === "Darwin" ? [`sudo ifconfig ${n} alias ${a} ${maskOf(p)}`, `sudo ifconfig ${n} -alias ${a}`, "Terminal; find the adapter name with: networksetup -listallhardwareports"]
+    : [`sudo ip addr add ${a}/${p} dev ${n}`, `sudo ip addr del ${a}/${p} dev ${n}`, "Terminal"];
+  return `<div class="small muted">${c[2]}</div><div class="small"><b>Add the address</b></div><pre class="cmd">${esc(c[0])}</pre><div class="small"><b>Remove it again when you are done</b></div><pre class="cmd">${esc(c[1])}</pre>`;
+}
+function netHtml(n, target, my, p) {
+  if (!n.local) return `<div class="box warn">The dashboard server runs on <b>another computer</b>, so it is the <b>server's</b> network port that has to reach <code>${esc(target)}</code> - not the one you are sitting at. Run this guide on the laptop that gets the cable, or ask whoever runs the server.</div>`;
+  if (n.covered) return `<div class="box ok">&#10003; This computer can reach <code>${esc(target)}</code> directly: interface <b>${esc(n.covered.name)}</b> has ${esc(n.covered.ip)}/${n.covered.prefix}. Nothing to change on the computer.</div>
+    <div class="small muted">If the device still does not answer: cable, power (wait a minute after switching on), and - when it hangs on a switch - the switch port: access port in the VLAN of that network, link up.</div>`;
+  const list = n.interfaces.map(i => `${esc(i.name)} ${esc(i.ip)}/${i.prefix}`).join(", ") || "no IPv4 address found";
+  return `<div class="box warn">This computer has no address in the network of <code>${esc(target)}</code>. Its interfaces: ${list}.<br>Give the <b>Ethernet adapter you plugged the cable into</b> a second address (its existing settings stay):
+    <div class="row" style="margin-top:8px"><div style="max-width:240px"><label>Name of that adapter</label><input type="text" id="ifName" placeholder="${n.system === "Windows" ? "Ethernet" : n.system === "Darwin" ? "en5" : "eth0"}"></div>
+      <div style="max-width:200px"><label>Address for this computer</label><input type="text" id="myAddr" value="${esc(my)}"></div></div>
+    <div class="small muted">The address must be free and in the device's network (prefix /${p}).</div>
+    <div id="netCmds">${netCmds(n.system, "", my, p)}</div>
+    <div class="small muted">Copy and run these yourself - the Guide never changes your computer's network settings. <b>Via a switch:</b> the switch port must be an access port in the VLAN of that network, and so must the computer's port. The Guide cannot configure switches; the direct OOB cable avoids the question.</div></div>`;
 }
 function factsHtml(d) {
   const f = d.facts, ch = (f.channels || []).filter(c => c.type === "decapsulator").length, tx = (f.channels || []).length - ch;
@@ -305,7 +368,7 @@ function bodyIdentity() {
     <h3>Blue network (backup)</h3><p class="muted small">Left empty, Blue is derived from Red (second octet + ${SITE.network.blue_octet_offset}).</p>
     <div class="row"><div>${inp("blue_ip", "IP address", "empty = derived")}</div><div>${inp("blue_prefix", "Prefix length", "empty = same as Red", "number")}</div><div>${inp("blue_gateway", "Gateway", "empty = derived")}</div></div>
     <details><summary>VLANs (default from the site settings)</summary><div class="row"><div>${inp("red_vlan", "Red VLAN", "0 = untagged", "number")}</div><div>${inp("blue_vlan", "Blue VLAN", "0 = untagged", "number")}</div></div></details>
-    <div class="actions"><button id="preview">Show what will change</button><button class="danger" id="write" disabled title="Press 'Show what will change' first">Write to device</button></div><div id="planOut2"></div>`;
+    ${serialGuard("sure")}<div class="actions"><button id="preview">Show what will change</button><button class="danger" id="write" disabled title="Press 'Show what will change' first">Write to device</button></div><div id="planOut2"></div>`;
   const collect = () => { ["name", "tag", "red_ip", "red_prefix", "red_gateway", "blue_ip", "blue_prefix", "blue_gateway", "red_vlan", "blue_vlan"].forEach(k => form[k] = $("#" + k).value.trim()); return form; };
   const fd = $("#fillDemoId"); if (fd) fd.onclick = () => { Object.entries(MODE.hints.identity).forEach(([k, v]) => { $("#" + k).value = v; }); };
   $("#preview").onclick = () => run("Reading the device", async () => {
@@ -313,8 +376,7 @@ function bodyIdentity() {
     const r = await api("/api/guide/plan", { mac, step: "identity", inputs: collect() });
     const i = r.inputs;
     $("#planOut2").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
-      <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>
-      ${serialGuard("sure")}`;
+      <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>`;
     $("#write").disabled = false; $("#write").dataset.was = "0"; $("#write").title = "";
     $("#write").onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); run("Writing", async () => {
       await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
@@ -337,7 +399,7 @@ function renderWaiting() {
 }
 
 // ---- steps 3 + 4: services, channels
-const previewRow = (label) => `<div class="actions"><button id="preview">${label}</button><button class="danger" id="write" disabled title="Check the preview first">Write to device</button></div>`;
+const previewRow = (label) => `${serialGuard("sure")}<div class="actions"><button id="preview">${label}</button><button class="danger" id="write" disabled title="Check the preview first">Write to device</button></div>`;
 function autoPreview(step) {      // reading is harmless, so show what will change straight away
   if (stepStatus(step) === "done" || RESULT[step]) return;
   run("Reading the device", async () => { await previewStep(step); });
@@ -346,7 +408,7 @@ async function previewStep(step) {
   const r = await api("/api/guide/plan", { mac, step, inputs: { overrides: ovr[step] } });
   const body = step === "channels" && r.summary ? channelsSummaryHtml(r) + `<details><summary>Technical details (${r.changes} settings)</summary>${rowsHtml(r.rows, { limit: 300 })}</details>` : rowsHtml(r.rows);
   $("#planOut").innerHTML = `<h3>This will be written</h3>${body}` +
-    (r.changes ? serialGuard("sure") : `<div class="actions"><button class="primary" id="markDone">Mark step as done</button></div>`);
+    (r.changes ? "" : `<div class="actions"><button class="primary" id="markDone">Mark step as done</button></div>`);
   const w = $("#write");
   if (w) { w.disabled = !r.changes; w.dataset.was = r.changes ? "0" : "1"; w.title = r.changes ? "" : "Nothing to write"; w.onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); applyStep(step); }; }
   const m = $("#markDone"); if (m) m.onclick = () => applyStep(step);

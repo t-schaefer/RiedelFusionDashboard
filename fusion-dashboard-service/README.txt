@@ -175,6 +175,12 @@ stays locked until the one before is done, and every write is read back:
                        address (OOB 11.a.b.c/8, media ports 10.a.b.c, last three MAC
                        bytes in decimal), laptop instructions, reads type / serial /
                        firmware. You compare the serial with the label.
+                       Three starting points: brand new (MAC) / already has an address
+                       (known) / address unknown (read-only search of one network,
+                       max. a /23). "Check this computer's network" shows whether
+                       this PC/Mac can reach the device and, if not, the commands
+                       to add a temporary address (copy them yourself - the Guide
+                       never changes the PC's network or a switch).
     2 Name & network   hostname, tag, Red IP/prefix/gateway (Blue derived from Red),
                        VLANs. Checks addresses and that no dashboard device uses them.
                        After the write the device moves; "Check connection" finds it on

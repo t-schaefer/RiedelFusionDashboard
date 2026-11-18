@@ -16,9 +16,14 @@ Roadmap: firmware step (docs/ROADMAP.md).
 import ipaddress
 import json
 import logging
+import platform
 import re
+import shutil
+import socket
+import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -229,6 +234,99 @@ def factory_addresses(mac_text):
             "Media ports (Red/Blue): 10.x.y.z - the rule Riedel documents for the MuoN A10 (first-port MAC); not yet confirmed on a Fusion.",
         ],
     }
+
+
+# ---------------------------------------------------------------- this computer's network (read only)
+def _run(cmd, timeout=6):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout or ""
+
+
+def host_interfaces():
+    """IPv4 addresses of the computer the SERVER runs on: [{name, ip, prefix}]. Read only."""
+    out, system = [], platform.system()
+    try:
+        if system == "Windows":
+            raw = _run(["powershell", "-NoProfile", "-Command",
+                        "Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias,IPAddress,PrefixLength | ConvertTo-Json"])
+            rows = json.loads(raw) if raw.strip() else []
+            for r in rows if isinstance(rows, list) else [rows]:
+                out.append({"name": r["InterfaceAlias"], "ip": r["IPAddress"], "prefix": int(r["PrefixLength"])})
+        elif shutil.which("ip"):
+            for line in _run(["ip", "-4", "-o", "addr"]).splitlines():
+                m = re.match(r"\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", line)
+                if m:
+                    out.append({"name": m.group(1), "ip": m.group(2), "prefix": int(m.group(3))})
+        else:
+            name = None
+            for line in _run(["ifconfig"]).splitlines():
+                h = re.match(r"^(\S+?):\s", line)
+                if h:
+                    name = h.group(1)
+                m = re.search(r"\binet (\d+\.\d+\.\d+\.\d+) netmask (0x[0-9a-fA-F]+|\d+\.\d+\.\d+\.\d+)", line)
+                if m and name:
+                    mask = m.group(2)
+                    prefix = bin(int(mask, 16)).count("1") if mask.startswith("0x") else ipaddress.ip_network("0.0.0.0/" + mask).prefixlen
+                    out.append({"name": name, "ip": m.group(1), "prefix": prefix})
+    except Exception as e:
+        logger.warning("could not list network interfaces: %s", e)
+    return [i for i in out if not i["ip"].startswith(("127.", "169.254."))]
+
+
+def host_network(target_ip, prefix=None, is_local=True):
+    """Can the computer running the server reach target_ip directly (same subnet)? Plus the commands to add a
+    temporary address - shown to the engineer to copy, never executed here (changing a computer's network is its owner's job)."""
+    ipaddress.ip_address(target_ip)
+    ifs = host_interfaces() if is_local else []
+    covered = None
+    for i in ifs:
+        net = ipaddress.ip_network("%s/%d" % (i["ip"], i["prefix"]), strict=False)
+        if ipaddress.ip_address(target_ip) in net:
+            covered = i
+            break
+    return {"system": platform.system(), "local": is_local, "interfaces": ifs, "covered": covered, "target": target_ip}
+
+
+# ---------------------------------------------------------------- find a device whose address is unknown (GET only)
+def _tcp_open(ip, port=80, timeout=0.6):
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def scan(cidr):
+    """Looks for emsfp devices in one subnet (at most a /23): a quick TCP check on port 80, then ONE read of
+    self/information on hosts that answer. Never writes."""
+    try:
+        net = ipaddress.ip_network(str(cidr or "").strip(), strict=False)
+    except ValueError:
+        raise ValueError("enter a network like 10.20.1.0/24")
+    if net.version != 4 or net.num_addresses > 512:
+        raise ValueError("scan at most a /23 (512 addresses) at a time")
+
+    def probe(host):
+        ip = str(host)
+        if not _tcp_open(ip):
+            return None
+        try:
+            info = ct.http_get(ip, "self/information")
+            if not isinstance(info, dict) or not info.get("serial_number"):
+                return None
+            try:
+                hostname = (ct.http_get(ip, "self/ipconfig") or {}).get("hostname")
+            except Exception:
+                hostname = None
+            return {"ip": ip, "type": info.get("type"), "serial": info.get("serial_number"), "hostname": hostname}
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=64) as ex:
+        found = [r for r in ex.map(probe, net.hosts() if net.prefixlen < 31 else list(net)) if r]
+    known = {d.get("ip") for d in _device_list()}
+    for r in found:
+        r["inDashboard"] = r["ip"] in known
+    return {"network": str(net), "found": found, "scanned": net.num_addresses}
 
 
 def _channels(ip_addr):
@@ -785,6 +883,11 @@ class GuideRoutes:
             return {"ok": True, "site": save_site(d.get("site") or {})}
         if p == "/api/guide/factory":
             return {"ok": True, **factory_addresses(d.get("mac"))}
+        if p == "/api/guide/scan":
+            return {"ok": True, **scan(d.get("network"))}
+        if p == "/api/guide/netcheck":
+            local = self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+            return {"ok": True, **host_network(str(d.get("ip") or ""), d.get("prefix"), local)}
         if p == "/api/guide/connect":
             return {"ok": True, "device": connect(d.get("ip"))}
         if p == "/api/guide/device":
