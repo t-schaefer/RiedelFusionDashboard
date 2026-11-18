@@ -1,0 +1,23 @@
+# Demo WITHOUT opening any port on the router: the app listens on 8090 of this machine, and a tunnel
+# (Tailscale Funnel or Cloudflare Tunnel) carries the public traffic in. No Caddy, the tunnel brings the HTTPS.
+#   docker compose -f deploy/docker-compose.tunnel.yml up -d --build
+# DEMO_BIND: 127.0.0.1 (default, only this machine / the tunnel on it) or 0.0.0.0 (also reachable from the LAN).
+# NOTE: 8090 is also the port of the real Fusion Dashboard service - do not run both on one machine.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    ports: ["${DEMO_BIND:-127.0.0.1}:8090:8190"]
+  # Only with Cloudflare:  docker compose -f deploy/docker-compose.tunnel.yml --profile cloudflare up -d
+  # (create the tunnel in the Cloudflare dashboard, point its public hostname to http://app:8190, put the token in CF_TUNNEL_TOKEN)
+  cloudflared:
+    profiles: ["cloudflare"]
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}

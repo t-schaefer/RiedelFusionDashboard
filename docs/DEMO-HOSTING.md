@@ -34,3 +34,11 @@ Better, in this order:
 ## Not covered
 - One shared state for all visitors (per-visitor sessions are on the roadmap).
 - The real tool is not hosted: it must run on the engineer's laptop next to the device.
+
+## Without port forwarding: tunnel + port 8090
+`deploy/docker-compose.tunnel.yml` publishes the demo on **port 8090 of the machine** and nothing on the router.
+The public IP stays free for other things.
+- **Tailscale Funnel:** `tailscale funnel --bg 8090` -> `https://<machine>.<tailnet>.ts.net`. Free, but only that
+  `ts.net` name (no own domain), only ports 443/8443/10000 publicly, unpublished bandwidth limit.
+- **Cloudflare Tunnel:** free, own name possible, but the DNS zone of the domain must be on Cloudflare.
+  Start with `--profile cloudflare` and `CF_TUNNEL_TOKEN`.
