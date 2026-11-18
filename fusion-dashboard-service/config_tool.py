@@ -43,6 +43,7 @@ UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 logger = logging.getLogger("fusion-dashboard")
 
+OPEN_ACCESS = False   # demo mode only: simulated devices, no login needed
 SESSION_COOKIE = "fusion_config_session"
 SESSION_TTL_SEC = 12 * 3600
 SESSIONS = {}  # token -> expiry (epoch); in memory, a restart logs everyone out
@@ -674,6 +675,8 @@ class ConfigRoutes:
     def _cfg_authorized(self):
         """Password set -> everyone needs a session. No password yet ->
         only this machine itself may use the config page."""
+        if OPEN_ACCESS:
+            return True
         if not password_configured():
             return self._cfg_is_local()
         return session_valid(self._cfg_token())

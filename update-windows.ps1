@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Updates this RiedelFusionDashboard checkout from git and restarts the
-  PLS Fusion Dashboard service.
+  Fusion Dashboard service.
 
 .NOTES
   Run from an elevated (Administrator) PowerShell, from the repo root (the

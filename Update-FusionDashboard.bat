@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 rem Double-click launcher for update-windows.ps1: updates this checkout from
-rem git and restarts the PLS Fusion Dashboard service, with no manual
+rem git and restarts the Fusion Dashboard service, with no manual
 rem PowerShell/Administrator steps needed. Works wherever this repo was
 rem cloned to - it locates update-windows.ps1 relative to its own location
 rem rather than assuming a fixed path.

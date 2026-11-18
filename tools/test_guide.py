@@ -92,7 +92,7 @@ groups = {r["group"] for r in p["rows"]}
 check("services plan covers syslog, NMOS, PTP", {"Syslog", "NMOS registration", "PTP"} <= groups, groups)
 res = g.apply(mac, "services", {}, rec["facts"]["serial"])
 check("services applied + verified", res["ok"], [r for r in res["rows"] if r.get("verify") not in (None, "ok")][:3])
-check("syslog server written", fd.ep["self/syslog"]["config"]["server"] == "10.12.64.24", fd.ep["self/syslog"]["config"])
+check("syslog server written", fd.ep["self/syslog"]["config"]["server"] == "10.0.0.50", fd.ep["self/syslog"]["config"])
 res2 = g.apply(mac, "services", {}, rec["facts"]["serial"])
 check("second run is a no-op", sum(1 for r in res2["rows"] if r["status"] == "change") == 0)
 
@@ -114,6 +114,13 @@ check("SDI 1 audio map: ch1-8 -> audio 1 ch0..7, ch9-16 -> audio 2", mapped[0] =
 last_out = fd.ep["sdi_output/" + fd.sdi_ids[5]]["sdi_aud_chans_cfg"]["ch0"]
 check("6th SDI output (id b7) takes audio from CH06, not a non-existent CH08", ids[last_out.rsplit(":", 2)[0]] == "rx ch6 flow 1 pri", last_out)
 
+# --- per-device overrides of the site layout
+po = g.plan(mac, "channels", {"overrides": {"audio": {"streams": 1, "channels_per_stream": 4}}})
+check("device override: 1 audio stream only", po["summary"]["channels"][0]["on"] == ["video", "audio 1", "data"], po["summary"]["channels"][0])
+check("override too large is rejected", raises(g.plan, mac, "channels", {"overrides": {"audio": {"streams": 5}}}) is not None)
+check("override > 16 audio channels is rejected", raises(g.plan, mac, "channels", {"overrides": {"audio": {"streams": 4, "channels_per_stream": 8}}}) is not None)
+check("services override reaches the plan", any(r["new"] == "10.9.9.9" for r in g.plan(mac, "services", {"overrides": {"syslog": {"server": "10.9.9.9"}}})["rows"]))
+
 # --- 5 verify + hand over
 checks = g.run_checks(mac)
 byid = {c["id"]: c for c in checks}
@@ -126,6 +133,10 @@ if failed:
     ho = g.hand_over(mac, True)
 check("device added to monitoring with name + tag", added == [("10.101.2.78", "CS3.IP/HI 09", "C03FRMSDIGTW009")], added)
 check("all steps done", g._public(g._get(mac))["next"] is None)
+
+g.forget(mac)
+check("forget removes the setup record", mac not in g.devices_state())
+check("forget unknown device is an error", raises(g.forget, mac) is not None)
 
 shutil.rmtree(tmp, ignore_errors=True)
 print("\n%d check(s) failed" % len(fails) if fails else "\nall checks passed")

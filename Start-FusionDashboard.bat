@@ -1,5 +1,5 @@
 @echo off
-rem Starts the PLS Fusion Dashboard service (Scheduled Task PLSFusionDashboardService). If the task is not
+rem Starts the Fusion Dashboard service (Scheduled Task PLSFusionDashboardService). If the task is not
 rem installed yet it runs the dashboard in this window instead (Ctrl+C stops it) - for a first test.
 rem Self-elevates via UAC, pauses so the result stays visible.
 setlocal

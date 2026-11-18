@@ -2,76 +2,70 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>PLS Fusion Dashboard</title>
+<title>Fusion Dashboard</title>
+<link rel="stylesheet" href="/app.css">
 <style>
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; color: #212529; font-size: 14px; }
-    header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid #dee2e6; }
-    header .title { font-size: 1.3rem; font-weight: 600; margin-right: 10px; }
-    .muted { color: #6c757d; }
-    .small { font-size: 0.8rem; }
+    body { font-size: 14px; }
+    .wrap { padding: 16px 20px 40px; }
+    header.pagehead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+    header.pagehead .title { font-size: 1.3rem; font-weight: 600; margin-right: 10px; }
     .toolbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
     .toolbar form { display: flex; gap: 6px; margin-left: auto; }
-    input[type=text] { padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; color: #fff; font-weight: 600; }
-    .badge.success { background: #198754; }
-    .badge.warning { background: #ffc107; color: #212529; }
-    .badge.danger { background: #dc3545; }
-    .badge.secondary { background: #6c757d; }
+    input[type=text] { padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 0.85rem; }
     .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
-    .dot.success { background: #198754; }
-    .dot.warning { background: #ffc107; }
-    .dot.danger { background: #dc3545; }
-    .dot.secondary { background: #adb5bd; }
-    .table-wrap { overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #dee2e6; }
+    .dot.success { background: var(--ok-strong); }
+    .dot.warning { background: var(--warn-strong); }
+    .dot.danger { background: var(--bad-strong); }
+    .dot.secondary { background: var(--muted); }
+    .table-wrap { overflow-x: auto; background: var(--panel); border-radius: 6px; border: 1px solid var(--line); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
-    thead th { position: sticky; top: 0; background: #fff; border-bottom: 2px solid #dee2e6; }
+    th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    thead th { position: sticky; top: 0; background: var(--panel); border-bottom: 2px solid var(--line); }
     th.sortable { cursor: pointer; user-select: none; position: relative; }
-    th.sortable:hover { background: #f1f3f5; }
-    .sort-arrow { font-size: 0.7em; color: #6c757d; }
-    .filter-btn { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; font-size: 0.75em; color: #adb5bd; }
-    .filter-btn.active { color: #0d6efd; font-weight: 700; }
-    .col-filter-popup { position: absolute; top: 100%; left: 0; z-index: 20; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-weight: normal; text-align: left; min-width: 130px; max-height: 220px; overflow-y: auto; }
+    th.sortable:hover { background: var(--hover); }
+    .sort-arrow { font-size: 0.7em; color: var(--muted); }
+    .filter-btn { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; font-size: 0.75em; color: var(--muted); }
+    .filter-btn.active { color: var(--accent); font-weight: 700; }
+    .col-filter-popup { position: absolute; top: 100%; left: 0; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-weight: normal; text-align: left; min-width: 130px; max-height: 220px; overflow-y: auto; }
     .col-filter-popup label { display: block; white-space: nowrap; font-weight: normal; }
     tbody tr.datarow { cursor: pointer; }
-    tbody tr.datarow:hover { background: #e7f1ff; }
-    .chev { display: inline-block; width: 1em; color: #0d6efd; font-size: 0.9em; transition: transform 0.12s; }
+    tbody tr.datarow:hover { background: var(--hover); }
+    .chev { display: inline-block; width: 1em; color: var(--accent); font-size: 0.9em; transition: transform 0.12s; }
     tr.datarow.open .chev { transform: rotate(90deg); }
-    tr.datarow.open { background: #f1f6ff; }
-    .groupbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding: 10px 12px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; }
+    tr.datarow.open { background: var(--accent-soft); }
+    .groupbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
     .groupbar .label { font-weight: 600; margin-right: 4px; }
-    .chip { padding: 6px 14px; border: 1px solid #adb5bd; border-radius: 999px; background: #fff; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #212529; }
-    .chip:hover { border-color: #0d6efd; background: #e7f1ff; }
-    .chip.active { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+    .chip { padding: 6px 14px; border: 1px solid var(--muted); border-radius: 999px; background: var(--panel); cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .chip:hover { border-color: var(--accent); background: var(--hover); }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
     .chip .n { font-weight: 400; opacity: 0.75; margin-left: 4px; }
-    .chip .off { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #dc3545; color: #fff; font-size: 0.72rem; }
+    .chip .off { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--bad-strong); color: #fff; font-size: 0.72rem; }
     .modalBg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
-    .modalBox { background: #fff; border-radius: 8px; padding: 16px 18px; max-width: 900px; width: 100%; box-shadow: 0 6px 30px rgba(0,0,0,0.3); }
+    .modalBox { background: var(--panel); border-radius: 8px; padding: 16px 18px; max-width: 900px; width: 100%; box-shadow: 0 6px 30px rgba(0,0,0,0.3); }
     .modalBox table { width: 100%; }
     .modalBox input[type=text] { width: 100%; font-family: monospace; }
-    .modalBox input.changed { border-color: #ffc107; background: #fff8e1; }
-    .modalBox input.bad { border-color: #dc3545; background: #fdecea; }
-    .hint { color: #6c757d; font-size: 0.82rem; margin: 0 0 8px 2px; }
-    tr.detail td { background: #f8f9fa; white-space: normal; }
-    .hidden { display: none; }
+    .modalBox input.changed { border-color: var(--warn-strong); background: var(--warn-soft); }
+    .modalBox input.bad { border-color: var(--bad-strong); background: var(--bad-soft); }
+    .hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 8px 2px; }
+    tr.detail td { background: var(--panel-2); white-space: normal; }
     tr.hidden { display: none; }
-    .btn { padding: 2px 8px; border: 1px solid #ced4da; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.78rem; }
-    .btn.danger { color: #dc3545; border-color: #dc3545; }
-    .alert { background: #f8d7da; color: #842029; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 8px; }
+    .btn { padding: 3px 10px; border-radius: 6px; font-size: 0.8rem; }
+    button.btn.danger, .btn.danger { background: var(--panel); color: var(--bad); border-color: var(--bad-strong); font-weight: 400; }
+    .small { font-size: 0.8rem; }
+    .alert { background: var(--bad-soft); color: var(--bad); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 8px; }
     .mini-table { border-collapse: collapse; font-size: 0.78rem; }
-    .mini-table td, .mini-table th { padding: 2px 6px; border-bottom: 1px solid #e9ecef; white-space: nowrap; }
-    .mini-table tr.chHead td { background: #eef1f4; font-weight: 600; padding-top: 5px; padding-bottom: 5px; }
-    .footnote { color: #6c757d; font-size: 0.8rem; margin-top: 8px; }
+    .mini-table td, .mini-table th { padding: 2px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .mini-table tr.chHead td { background: var(--panel-2); font-weight: 600; padding-top: 5px; padding-bottom: 5px; }
+    .footnote { color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
 </style>
 </head>
-<body>
-    <header>
-        <span class="title">PLS Fusion Dashboard</span>
+<body class="dash">
+    <div id="appNav"></div>
+    <div class="wrap">
+    <header class="pagehead">
         <span id="summaryBar"></span>
-        <a id="guideLink" class="btn" href="/guide" style="margin-left:auto; text-decoration:none; font-weight:600;" title="Step-by-step setup of a new Fusion">Guide</a>
-        <a id="configLink" class="btn" href="/config" style="text-decoration:none; font-weight:600;" title="Batch device configuration (login required)">Config</a>
-        <a id="mnSetLink" class="btn" href="#" target="_blank" rel="noopener" style="text-decoration:none;">MN SET</a>
+        <span style="margin-left:auto"></span>
         <button class="btn" id="pollingToggleBtn">...</button>
         <span class="muted small" id="lastUpdate"></span>
     </header>
@@ -91,7 +85,7 @@
     <div class="groupbar" id="groupBar" title="Show only one device group (filters the table, the summary and the warnings list)"></div>
     <p class="hint">&#9656; Click a device row to open its details (reboot, color bars, stream rates, resets).</p>
 
-    <div id="syslogPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+    <div id="syslogPanel" class="hidden" style="background: var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:12px;">
         <div class="small muted" style="margin-bottom:8px;">
             Applies this syslog target to every device currently in the fleet list below (unverified against a live unit - see server.py comment on configure_syslog; test on one device first if unsure).
         </div>
@@ -126,7 +120,7 @@
         </form>
     </div>
 
-    <div id="lldpPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+    <div id="lldpPanel" class="hidden" style="background: var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
             <div class="small muted" id="lldpPanelInfo"></div>
             <div>
@@ -143,7 +137,7 @@
         </div>
     </div>
 
-    <div id="warningsPanel" class="hidden" style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:12px; margin-bottom:12px;">
+    <div id="warningsPanel" class="hidden" style="background: var(--panel); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <div class="small muted">Devices reporting warnings or info-level notes (real warnings first). Click a row to jump to that device.</div>
             <button class="btn" id="closeWarningsPanelBtn" title="Close">&times; Close</button>
@@ -199,12 +193,20 @@ let columnFilters = {}; // key -> Set of allowed values; absent = no restriction
 // name is all that MuoN cards have; Fusions follow the same naming). Order =
 // dropdown order. OC covers OC.IP/HI, OC.IP/S and OC VirtU; DCR and DCB are
 // one group. Names that match nothing land in "Other" (only listed if used).
-const GROUP_RULES = [
+let GROUP_RULES = [
     [/^GFX/i, "GFX"], [/^ST\d*\b/i, "ST1"], [/^CS\d+\b/i, "CS Rooms"], [/^REPLAY/i, "REPLAY"],
     [/^ASX/i, "ASX"], [/^DC[RB]\b/i, "DCR/DCB"], [/^GR\d*\b/i, "GR"], [/^MC\d*\b/i, "MC"],
     [/^OC\b/i, "OC"], [/^PCR/i, "PCR"], [/^SCR/i, "SCR"]
 ];
-const GROUP_ORDER = GROUP_RULES.map(r => r[1]).filter((g, i, a) => a.indexOf(g) === i);
+let GROUP_ORDER = GROUP_RULES.map(r => r[1]).filter((g, i, a) => a.indexOf(g) === i);
+// The server may bring its own grouping (GROUP_RULES in server.py / demo mode): [{re, label}, ...]
+function setGroupRules(list) {
+    GROUP_RULES = list.map(g => [new RegExp(g.re, "i"), g.label]);
+    GROUP_ORDER = GROUP_RULES.map(r => r[1]).filter((g, i, a) => a.indexOf(g) === i);
+    groupBarSig = "";
+    if (typeof lastData !== "undefined" && lastData && lastData.devices) { renderGroupBar(lastData.devices); applyDisplay(); }
+}
+fetch("/api/mode", { cache: "no-store" }).then(r => r.json()).then(m => { if (m.groups && m.groups.length) setGroupRules(m.groups); }).catch(() => {});
 function deviceGroup(dev) {
     const name = String(dev.name || (dev.config && dev.config.ipconfig && dev.config.ipconfig.hostname) || "").trim();
     for (const [re, group] of GROUP_RULES) if (re.test(name)) return group;
@@ -418,7 +420,6 @@ document.querySelectorAll("#deviceTableHead .filter-btn").forEach(btn => {
 });
 
 // MN SET runs on the same host as this dashboard, on port 8080.
-document.getElementById("mnSetLink").href = `http://${location.hostname}:8080/`;
 
 function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString() : "-"; }
 function fmtBw(bytesPerSec) {
@@ -582,7 +583,7 @@ function renderRow(dev) {
     const nmos = cfg.nmos || {};
     const warnings = (health.warnings) || [];
     // Thresholds: yellow from 70C, red from 73C (also documented in README.txt).
-    const tempColor = hlt.core_temp >= 73 ? "#dc3545" : hlt.core_temp >= 70 ? "#c98a00" : "#198754";
+    const tempColor = hlt.core_temp >= 73 ? "var(--bad-strong)" : hlt.core_temp >= 70 ? "var(--warn)" : "var(--ok-strong)";
     const syslogCfg = (cfg.syslog && cfg.syslog.config) || {};
     // When a device is unreachable, health fields keep whatever they were
     // at the last successful poll (see README.txt) - shown normally that
@@ -598,17 +599,17 @@ function renderRow(dev) {
       <td>${displayName}${dev.tag ? `<div class="muted small">${dev.tag}</div>` : ""}</td>
       <td title="${(cfg.information && cfg.information.type) || ""}">${deviceType(dev)}</td>
       <td>${fw ? fw.semantic_version : "-"}</td>
-      <td${isStale ? ' style="color:#adb5bd"' : ""}>${(() => {
+      <td${isStale ? ' style="color:var(--muted)"' : ""}>${(() => {
         const sdi = cfg.sdi || {};
         const set = sdi.configuration && sdi.configuration.operating_bit_rate;
         if (!set) return "-";
         const run = sdi.running_operating_bit_rate;
         return set + (run && run !== set ? ` <span class="muted small" title="actually running">(${run})</span>` : "");
       })()}</td>
-      <td style="color:${isStale ? "#adb5bd" : tempColor};font-weight:600" title="${isStale ? staleTitle + (hlt.core_temp != null ? " (" + hlt.core_temp + "°C)" : "") : ""}">${isStale ? "-" : (hlt.core_temp ?? "-")}&deg;C</td>
+      <td style="color:${isStale ? "var(--muted)" : tempColor};font-weight:600" title="${isStale ? staleTitle + (hlt.core_temp != null ? " (" + hlt.core_temp + "°C)" : "") : ""}">${isStale ? "-" : (hlt.core_temp ?? "-")}&deg;C</td>
       <td><span class="badge ${isStale ? "secondary" : (refclk.status === "locked" ? "success" : "danger")}" title="${isStale ? staleTitle : ""}">${isStale ? "-" : (refclk.status || "?")}</span></td>
-      <td><span class="badge ${isStale ? "secondary" : (ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "red" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "red" ? "Currently communicating via Red" : "")}">${isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-")}</span></td>
-      <td><span class="badge ${isStale ? "secondary" : (ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "blue" ? "outline:2px solid #212529;" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : "")}">${isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-")}</span></td>
+      <td><span class="badge ${isStale ? "secondary" : (ifs.e1 && ifs.e1.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "red" ? "outline:2px solid var(--text);" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "red" ? "Currently communicating via Red" : "")}">${isStale ? "-" : ((ifs.e1 && ifs.e1.link_status) || "-")}</span></td>
+      <td><span class="badge ${isStale ? "secondary" : (ifs.e2 && ifs.e2.link_status === "up" ? "success" : "secondary")}" style="${!isStale && dev.activeNetwork === "blue" ? "outline:2px solid var(--text);" : ""}" title="${isStale ? staleTitle : (dev.activeNetwork === "blue" ? "Currently communicating via Blue (Red is unreachable)" : "")}">${isStale ? "-" : ((ifs.e2 && ifs.e2.link_status) || "-")}</span></td>
       <td>${(() => {
         const bothLinksDown = dev.status === "offline" || (ifs.e1 && ifs.e2 && ifs.e1.link_status !== "up" && ifs.e2.link_status !== "up");
         const sw = splitWarnings(warnings);
@@ -632,7 +633,7 @@ function renderRow(dev) {
           <button class="btn" id="closeDetail-${id}" title="Close">&times; Close</button>
         </div>
         ${dev.status === "offline" ? `<div class="alert">Unreachable${dev.lastError ? " (" + dev.lastError + ")" : ""}</div>` : ""}
-        ${dev.activeNetwork === "blue" ? `<div class="alert" style="background:#cfe2ff; color:#084298;">Communicating via Blue (backup) - Red is not responding right now.</div>` : ""}
+        ${dev.activeNetwork === "blue" ? `<div class="alert" style="background:var(--accent-soft); color:var(--accent);">Communicating via Blue (backup) - Red is not responding right now.</div>` : ""}
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start">
           <div class="small" style="min-width:260px">
             <div>Type: ${(cfg.information && cfg.information.type) || "-"}${cfg.information && cfg.information.base_type ? " (" + cfg.information.base_type + ")" : ""}</div>
@@ -655,7 +656,7 @@ function renderRow(dev) {
             <button class="btn" id="removeDevice-${id}" title="Remove this device from the dashboard (the device itself is not touched)">Remove from dashboard</button>
           </div>
         </div>
-        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; border-top:1px solid #e9ecef; padding-top:10px;">
+        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; border-top:1px solid var(--line); padding-top:10px;">
           ${sdiBitrateHtml(dev, id)}
           <div>
             <div class="small" style="font-weight:600; margin-bottom:4px;">
@@ -704,7 +705,7 @@ function pruneRemovedRows(devices) {
 
 function renderSummary(summary) {
     if (groupFilter && lastData) summary = summarize(lastData.devices.filter(d => deviceGroup(d) === groupFilter));
-    const ring = (status) => statusFilter === status ? "outline:2px solid #212529; outline-offset:1px;" : "";
+    const ring = (status) => statusFilter === status ? "outline:2px solid var(--text); outline-offset:1px;" : "";
     document.getElementById("summaryBar").innerHTML =
         `<span class="badge success" id="onlineSummaryBadge" style="cursor:pointer; ${ring("online")}" title="Click to show only online devices">${summary.online || 0} online</span> ` +
         `<span class="badge warning" id="warningSummaryBadge" style="cursor:pointer" title="Click to list devices with warnings">${summary.warning || 0} warning</span> ` +
@@ -812,7 +813,7 @@ function focusDevice(ip) {
     row.classList.remove("hidden");
     if (detail) { detail.classList.remove("hidden"); }
     row.scrollIntoView({ behavior: "smooth", block: "center" });
-    row.style.outline = "2px solid #ffc107";
+    row.style.outline = "2px solid var(--warn-strong)";
     setTimeout(() => { row.style.outline = ""; }, 2000);
 }
 
@@ -839,8 +840,8 @@ function updatePollingButton(enabled) {
     const btn = document.getElementById("pollingToggleBtn");
     btn.textContent = enabled ? "Pause polling (global)" : "Resume polling (global)";
     btn.dataset.enabled = enabled ? "1" : "0";
-    btn.style.color = enabled ? "" : "#dc3545";
-    btn.style.borderColor = enabled ? "" : "#dc3545";
+    btn.style.color = enabled ? "" : "var(--bad-strong)";
+    btn.style.borderColor = enabled ? "" : "var(--bad-strong)";
 }
 
 async function togglePolling() {
@@ -930,7 +931,7 @@ function streamsSectionHtml(ip) {
             : "";
         const open = !!streamGroupOpen[ip + "|" + channel];
         const btnName = rows[0].label ? escapeHtml(rows[0].label) : "";
-        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""}${btnName ? ` <span style="color:#0d6efd">${btnName}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:#dc3545;" : "color:#6c757d;"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
+        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""}${btnName ? ` <span style="color:var(--accent)">${btnName}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:var(--bad-strong);" : "color:var(--muted);"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
         body += rows.map(s => `<tr class="chRow${open ? "" : " hidden"}" data-ch="${channel}"><td>${s.name || "-"}${s.label ? ` <span class="muted">${escapeHtml(s.label)}</span>` : ""}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
     });
     return `<div style="max-height:320px; overflow-y:auto;"><table class="mini-table">` +
@@ -1094,7 +1095,7 @@ async function openAddressEditor(ip, id, channel) {
       <div style="max-height:55vh; overflow-y:auto;"><table class="mini-table"><thead><tr><th>Stream</th><th>Leg</th><th>Address</th><th>Port</th><th>Source</th><th>Flow</th></tr></thead><tbody>${f.map(rowHtml).join("")}</tbody></table></div>
       <div style="margin-top:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <label class="small"><input type="checkbox" id="addrEnable" checked> switch the changed flows on afterwards (only possible with an address)</label>
-        <button class="btn" id="addrSave" style="margin-left:auto; background:#0d6efd; color:#fff; border-color:#0d6efd;" disabled>Save changes</button>
+        <button class="btn" id="addrSave" style="margin-left:auto; background:var(--accent); color:var(--on-accent); border-color:var(--accent);" disabled>Save changes</button>
       </div>
       <div id="addrMsg" class="small" style="margin-top:8px; white-space:pre-wrap;"></div>`;
     document.getElementById("addrClose").onclick = closeAddressEditor;
@@ -1386,5 +1387,7 @@ document.getElementById("syslogForm").addEventListener("submit", async (ev) => {
 refresh();
 setInterval(refresh, REFRESH_MS);
 </script>
+    </div>
+<script src="/app-nav.js"></script>
 </body>
 </html>

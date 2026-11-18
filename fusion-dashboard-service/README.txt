@@ -1,4 +1,4 @@
-PLS Fusion Dashboard - background service
+Fusion Dashboard - background service
 ============================================
 
 What this is
@@ -146,6 +146,25 @@ outlines whichever of the Red/Blue badges is currently in use, and the
 device detail panel shows a blue banner when it's talking to a device over
 Blue only.
 
+Demo mode - a safe system to look at and to show
+--------------------------------------------------
+    Start-Demo-FusionDashboard.bat      (or:  python server.py --demo [--port 8190] [--host 0.0.0.0])
+Starts the whole service against SIMULATED devices on http://127.0.0.1:8190/ - nothing real is
+touched, no login is needed, and all data lives in demo-data/ (wiped at every start). It has:
+    - one factory-fresh Fusion to set up with the Guide: MAC 40:A3:6B:A2:16:14 (the Guide offers
+      "Fill it in" / "Fill in demo values" buttons in demo mode), and
+    - two finished devices already in monitoring: a Fusion (Studio A Gateway) and a MuoN (Studio B
+      Decoder, with one info note). They are not painted on: at start they are commissioned through
+      the very same Guide code an engineer uses.
+After the Guide hands the third device over it shows up in the dashboard (group "Studio C").
+The simulated devices follow the settings catalog; they prove that the tool works, not that a real
+unit accepts every write. Tests: python tools/test_guide.py.
+
+One look on every page: Dashboard, Guide and Expert config share the top navigation and the same
+colours (light and dark follow the system). Extra links in the navigation (e.g. MN SET, port 8080)
+come from EXTRA_LINKS in server.py (not shown in demo mode); the dashboard's device groups come from
+GROUP_RULES in server.py, or from the built-in rules of the dashboard page when that is None.
+
 Guided setup (/guide) - commissioning a new Fusion step by step
 -----------------------------------------------------------------
 "Guide" button in the header, or http://<this PC>:8090/guide. A step-by-step
@@ -178,8 +197,11 @@ config tool's read / plan / apply / read-back code, so the same safety applies. 
 flagged "unverified" are not yet confirmed on a unit; the multicast addresses are not
 set here (routing assigns them, or use Expert config). Roadmap: docs/ROADMAP.md.
 
-Try it without hardware: python tools/fake_fleet.py   (simulated factory Fusion, then
-open http://127.0.0.1:8190/guide); python tools/test_guide.py runs the logic test.
+Navigation inside the Guide: every step has Back / Next (Next unlocks when the step is done), the
+step bar is clickable for steps that are unlocked, a finished step can be run again, "Site
+settings" can be opened from a step and returns to it, and a device's setup record can be removed
+on the Devices page. Per device you can override the site values for services (syslog, NMOS, PTP,
+IGMP) and the audio layout. Try it without hardware: demo mode (above).
 
 Device config (the former MuoN Config Tool) - /config
 -------------------------------------------------------

@@ -990,6 +990,14 @@ def state_payload():
         return _state_cache["raw"], _state_cache["gz"]
 
 
+DEMO = False   # set by --demo: simulated devices, nothing real is touched
+DEMO_HINTS = {}
+GROUP_RULES = None   # optional [{"re": "^Studio A", "label": "Studio A"}, ...]; None = the dashboard's built-in rules
+# Extra links in the top navigation (not in demo mode). {host} = the host the page was opened on.
+EXTRA_LINKS = [{"label": "MN SET", "url": "http://{host}:8080/"}]
+STATIC_FILES = {"/app.css": ("app.css", "text/css; charset=utf-8"), "/app-nav.js": ("app-nav.js", "application/javascript; charset=utf-8")}
+
+
 class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         if args and str(args[0]).startswith("GET /api/state"):
@@ -1019,6 +1027,17 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path in STATIC_FILES:
+            name, ctype = STATIC_FILES[self.path]
+            body = (BASE_DIR / name).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/mode":
+            self._send_json({"demo": DEMO, "links": [] if DEMO else EXTRA_LINKS, "auth": config_tool.password_configured() and not DEMO, "hints": DEMO_HINTS if DEMO else None, "groups": GROUP_RULES})
         elif self.path == "/api/state":
             raw, gz = state_payload()
             use_gz = "gzip" in self.headers.get("Accept-Encoding", "")
@@ -1333,6 +1352,13 @@ def main():
     if "--set-password" in sys.argv:
         set_config_password()
         return
+    demo = "--demo" in sys.argv
+    if demo:
+        import demo_fleet
+        demo_fleet.prepare(sys.modules[__name__])
+        for h in list(logger.handlers):        # the demo must not write into the real service.log
+            if isinstance(h, logging.handlers.RotatingFileHandler):
+                logger.removeHandler(h)
     config_tool.init(load_devices)
     guide_tool.init(add_device, load_devices)
     init_state()
@@ -1341,7 +1367,9 @@ def main():
     ThreadingHTTPServer.request_queue_size = 128   # default 5 drops connections when many browsers connect at once
     ThreadingHTTPServer.daemon_threads = True
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    logger.info("PLS Fusion Dashboard service listening on http://%s:%d/", HOST, PORT)
+    if demo:
+        demo_fleet.seed(lambda m: logger.info(m))
+    logger.info("Fusion Dashboard service listening on http://%s:%d/", HOST, PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

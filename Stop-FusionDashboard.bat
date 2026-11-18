@@ -1,5 +1,5 @@
 @echo off
-rem Stops the PLS Fusion Dashboard service (Scheduled Task PLSFusionDashboardService). It starts again at the
+rem Stops the Fusion Dashboard service (Scheduled Task PLSFusionDashboardService). It starts again at the
 rem next boot, with Start-FusionDashboard.bat or Update-FusionDashboard.bat.
 rem Self-elevates via UAC, pauses so the result stays visible.
 setlocal

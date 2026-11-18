@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Starts the PLS Fusion Dashboard service (Scheduled Task "PLSFusionDashboardService").
+  Starts the Fusion Dashboard service (Scheduled Task "PLSFusionDashboardService").
   If the task is not installed yet, runs the dashboard in this window instead (Ctrl+C stops it).
   Usually started by double-clicking Start-FusionDashboard.bat (self-elevates).
 #>

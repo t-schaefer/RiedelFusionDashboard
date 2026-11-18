@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Installs the PLS Fusion Dashboard service as a Windows Scheduled Task
+  Installs the Fusion Dashboard service as a Windows Scheduled Task
   that runs under the SYSTEM account - starts at boot, keeps running whether
   or not any user is logged in, and restarts itself if it ever crashes.
 
@@ -64,7 +64,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings `
-    -Description "PLS Fusion Dashboard - polls the Fusion device fleet and serves a web dashboard on port $Port. Runs as SYSTEM, no user login required." | Out-Null
+    -Description "Fusion Dashboard - polls the Fusion device fleet and serves a web dashboard on port $Port. Runs as SYSTEM, no user login required." | Out-Null
 
 Write-Host "Task '$TaskName' registered. Starting it now..."
 Start-ScheduledTask -TaskName $TaskName

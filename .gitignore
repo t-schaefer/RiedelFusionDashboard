@@ -10,3 +10,4 @@ fusion-dashboard-service/config-profiles/*.json
 !fusion-dashboard-service/config-profiles/*.example.json
 fusion-dashboard-service/guide-site.json
 fusion-dashboard-service/guide-state.json
+fusion-dashboard-service/demo-data/

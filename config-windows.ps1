@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Edit the device list of the PLS Fusion Dashboard: stops the service, opens
+  Edit the device list of the Fusion Dashboard: stops the service, opens
   fusion-dashboard-service\devices.json in Notepad, checks it is valid JSON (restores the backup
   devices.json.bak if not) and starts the service again. The service rewrites devices.json itself
   (e.g. "+ Device"), so a hand edit made while it runs would be lost - hence the stop.

@@ -63,8 +63,8 @@ DEFAULT_SITE = {
     "configured": False,
     "site_name": "",
     "network": {"red_vlan": 0, "blue_vlan": 0, "red_dhcp": False, "blue_dhcp": True, "blue_octet_offset": 1},
-    "syslog": {"server": "10.12.64.24", "port": 514, "enable": True},
-    "nmos": {"registry": "10.12.81.11:8080"},
+    "syslog": {"server": "10.0.0.50", "port": 514, "enable": True},
+    "nmos": {"registry": "10.0.0.60:8080"},
     "ptp": {"domain": 127, "dscp": 46},
     "system": {"igmp_version": 3, "class_2022_7": "d"},
     "audio": {"streams": 4, "channels_per_stream": 4},
@@ -185,6 +185,15 @@ def _mark(mac, step, status, note=""):
         rec["updated"] = _now()
         _save_state(state)
         return rec
+
+
+def forget(mac):
+    """Removes a device's setup record (it does not touch the device or the dashboard)."""
+    with LOCK:
+        state = _load_state()
+        if state["devices"].pop(mac, None) is None:
+            raise ValueError("unknown device")
+        _save_state(state)
 
 
 def _get(mac):
@@ -326,7 +335,7 @@ def _identity_inputs(inp, rec):
             ip = ip or (_shift_second_octet(out["red_ip"], off) if off else "")
             gw = gw or (_shift_second_octet(out["red_gateway"], off) if off else "")
         try:
-            prefix = int(inp.get(net + "_prefix") or 30)
+            prefix = int(inp.get(net + "_prefix") or (out["red_prefix"] if net == "blue" else 30))
             iface = ipaddress.ip_interface(f"{ip}/{prefix}")
             gateway = ipaddress.ip_address(gw)
         except ValueError:
@@ -368,11 +377,25 @@ SERVICE_IDS = [
 ]
 
 
-def services_profile():
+def effective_site(overrides):
+    """The site settings with this device's own overrides applied (and validated).
+    Overrides use the same shape as the site settings, e.g. {"audio": {"streams": 2}}."""
+    if not overrides:
+        return load_site()
+    site = validate_site(_merge(load_site(), overrides))
+    return site
+
+
+def _overrides(inputs):
+    o = (inputs or {}).get("overrides")
+    return o if isinstance(o, dict) else {}
+
+
+def services_profile(site=None):
     """Site values for the services step; everything else the site-default profile
     already defines (syslog monitoring flags, PTP timing, NMOS details) is added
     on top so a new device ends up like the rest of the fleet."""
-    site = load_site()
+    site = site or load_site()
     base = {}
     for name in ("site-default", "site-default.example"):
         f = ct.PROFILES_DIR / (name + ".json")
@@ -409,11 +432,11 @@ def _telemetry(addr):
     return (data or {}).get("devices", [])
 
 
-def channels_profile(read):
+def channels_profile(read, site=None):
     """Flow enable states and SDI audio map for the site's audio layout.
     Per channel: video, the first N audio streams and the data stream ON (both
     legs, ST 2022-7), any further audio streams OFF."""
-    site = load_site()
+    site = site or load_site()
     streams, per = site["audio"]["streams"], site["audio"]["channels_per_stream"]
     tele = _telemetry(read["address"])
     by_uuid = {}
@@ -500,9 +523,9 @@ def build_profile(rec, step, inputs):
     if step == "identity":
         return identity_profile(inputs, rec)
     if step == "services":
-        return services_profile(), {}
+        return services_profile(effective_site(_overrides(inputs))), {"overrides": _overrides(inputs)}
     if step == "channels":
-        return None, {}
+        return None, {"overrides": _overrides(inputs)}
     raise ValueError("this step writes nothing")
 
 
@@ -515,7 +538,7 @@ def plan(mac, step, inputs):
     profile, clean = build_profile(rec, step, inputs or {})
     summary = None
     if step == "channels":
-        profile, summary = channels_profile(read)
+        profile, summary = channels_profile(read, effective_site(clean.get("overrides")))
     rows = ct.plan_device(read, profile, None)
     changes = sum(1 for r in rows if r["status"] == "change")
     return {"rows": _words(rows), "changes": changes, "summary": summary,
@@ -533,7 +556,9 @@ def apply(mac, step, inputs, serial):
     read = _fresh_read(rec)
     profile, clean = build_profile(rec, step, inputs or {})
     if step == "channels":
-        profile, _summary = channels_profile(read)
+        profile, _summary = channels_profile(read, effective_site(clean.get("overrides")))
+    if step in ("services", "channels"):
+        _update(mac, inputs=dict(rec.get("inputs", {}), **{step: clean}))
     if step == "identity":
         return _apply_identity(mac, rec, read, profile, clean)
     with ct.APPLY_LOCK:
@@ -773,6 +798,9 @@ class GuideRoutes:
             return {"ok": True, **apply(str(d.get("mac") or "").lower(), d.get("step"), d.get("inputs"), d.get("serial"))}
         if p == "/api/guide/confirm-identity":
             return {"ok": True, **confirm_identity(str(d.get("mac") or "").lower())}
+        if p == "/api/guide/forget":
+            forget(str(d.get("mac") or "").lower())
+            return {"ok": True}
         if p == "/api/guide/checks":
             return {"ok": True, "checks": run_checks(str(d.get("mac") or "").lower())}
         if p == "/api/guide/hand-over":

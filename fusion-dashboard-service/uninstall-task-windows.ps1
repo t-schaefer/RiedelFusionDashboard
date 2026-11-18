@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Removes the PLS Fusion Dashboard scheduled task and its firewall rule.
+  Removes the Fusion Dashboard scheduled task and its firewall rule.
   Run from an elevated (Administrator) PowerShell.
 #>
 

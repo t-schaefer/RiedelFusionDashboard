@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Stops the PLS Fusion Dashboard service: the Scheduled Task "PLSFusionDashboardService" (waits until it is
+  Stops the Fusion Dashboard service: the Scheduled Task "PLSFusionDashboardService" (waits until it is
   stopped) and any python still running fusion-dashboard-service\server.py.
   It starts again at the next boot, with Start-FusionDashboard.bat or Update-FusionDashboard.bat.
   Usually started by double-clicking Stop-FusionDashboard.bat (self-elevates).
