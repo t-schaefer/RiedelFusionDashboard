@@ -305,15 +305,17 @@ function bodyIdentity() {
     <h3>Blue network (backup)</h3><p class="muted small">Left empty, Blue is derived from Red (second octet + ${SITE.network.blue_octet_offset}).</p>
     <div class="row"><div>${inp("blue_ip", "IP address", "empty = derived")}</div><div>${inp("blue_prefix", "Prefix length", "empty = same as Red", "number")}</div><div>${inp("blue_gateway", "Gateway", "empty = derived")}</div></div>
     <details><summary>VLANs (default from the site settings)</summary><div class="row"><div>${inp("red_vlan", "Red VLAN", "0 = untagged", "number")}</div><div>${inp("blue_vlan", "Blue VLAN", "0 = untagged", "number")}</div></div></details>
-    <div class="actions"><button id="preview">Show what will change</button></div><div id="planOut2"></div>`;
+    <div class="actions"><button id="preview">Show what will change</button><button class="danger" id="write" disabled title="Press 'Show what will change' first">Write to device</button></div><div id="planOut2"></div>`;
   const collect = () => { ["name", "tag", "red_ip", "red_prefix", "red_gateway", "blue_ip", "blue_prefix", "blue_gateway", "red_vlan", "blue_vlan"].forEach(k => form[k] = $("#" + k).value.trim()); return form; };
   const fd = $("#fillDemoId"); if (fd) fd.onclick = () => { Object.entries(MODE.hints.identity).forEach(([k, v]) => { $("#" + k).value = v; }); };
   $("#preview").onclick = () => run("Reading the device", async () => {
+    $("#write").disabled = true; $("#write").dataset.was = "1";
     const r = await api("/api/guide/plan", { mac, step: "identity", inputs: collect() });
     const i = r.inputs;
     $("#planOut2").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
       <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>
-      ${serialGuard("sure")}<div class="actions"><button class="danger" id="write">Write to device</button></div>`;
+      ${serialGuard("sure")}`;
+    $("#write").disabled = false; $("#write").dataset.was = "0"; $("#write").title = "";
     $("#write").onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); run("Writing", async () => {
       await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
       await reloadDevice(); renderDevice(); }); };
@@ -335,12 +337,18 @@ function renderWaiting() {
 }
 
 // ---- steps 3 + 4: services, channels
+const previewRow = (label) => `<div class="actions"><button id="preview">${label}</button><button class="danger" id="write" disabled title="Check the preview first">Write to device</button></div>`;
+function autoPreview(step) {      // reading is harmless, so show what will change straight away
+  if (stepStatus(step) === "done" || RESULT[step]) return;
+  run("Reading the device", async () => { await previewStep(step); });
+}
 async function previewStep(step) {
   const r = await api("/api/guide/plan", { mac, step, inputs: { overrides: ovr[step] } });
   const body = step === "channels" && r.summary ? channelsSummaryHtml(r) + `<details><summary>Technical details (${r.changes} settings)</summary>${rowsHtml(r.rows, { limit: 300 })}</details>` : rowsHtml(r.rows);
   $("#planOut").innerHTML = `<h3>This will be written</h3>${body}` +
-    (r.changes ? serialGuard("sure") + `<div class="actions"><button class="danger" id="write">Write to device</button></div>` : `<div class="actions"><button class="primary" id="markDone">Mark step as done</button></div>`);
-  const w = $("#write"); if (w) w.onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); applyStep(step); };
+    (r.changes ? serialGuard("sure") : `<div class="actions"><button class="primary" id="markDone">Mark step as done</button></div>`);
+  const w = $("#write");
+  if (w) { w.disabled = !r.changes; w.dataset.was = r.changes ? "0" : "1"; w.title = r.changes ? "" : "Nothing to write"; w.onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); applyStep(step); }; }
   const m = $("#markDone"); if (m) m.onclick = () => applyStep(step);
 }
 function channelsSummaryHtml(r) {
@@ -376,9 +384,10 @@ function bodyServices() {
     <details ${Object.keys(ovr.services).length ? "open" : ""}><summary>Use different values for this device only</summary><p class="small muted">Leave a field empty to use the site value (shown greyed).</p>
       ${ovRow(ovr.services, [["syslog", "server", "Syslog server", "text"], ["syslog", "port", "Syslog port"], ["nmos", "registry", "NMOS registry", "text"]])}
       ${ovRow(ovr.services, [["ptp", "domain", "PTP domain"], ["ptp", "dscp", "PTP DSCP"], ["system", "igmp_version", "IGMP version"]])}</details>
-    <div class="actions"><button id="preview">Show what will change</button></div>`;
+    ${previewRow("Update preview")}`;
   wireSiteLink();
   $("#preview").onclick = () => run("Reading the device", async () => { collectOverrides("services"); await previewStep("services"); });
+  autoPreview("services");
 }
 function bodyChannels() {
   const a = SITE.audio;
@@ -386,9 +395,10 @@ function bodyChannels() {
     <details ${Object.keys(ovr.channels).length ? "open" : ""}><summary>Use a different audio layout for this device only</summary>
       ${ovRow(ovr.channels, [["audio", "streams", "Audio streams per channel (1-4)"], ["audio", "channels_per_stream", "Channels per stream"]])}</details>
     <p class="muted small">Multicast addresses are not set here: routing (NMOS / the router control system) assigns them. To enter them by hand use <a href="/config">Expert config</a>.</p>
-    <div class="actions"><button id="preview">Show what will change</button></div>`;
+    ${previewRow("Update preview")}`;
   wireSiteLink();
   $("#preview").onclick = () => run("Reading the device", async () => { collectOverrides("channels"); await previewStep("channels"); });
+  autoPreview("channels");
 }
 
 // ---- step 5: checks + hand over
