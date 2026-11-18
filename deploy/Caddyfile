@@ -1,5 +1,5 @@
 # HTTPS in front of the demo. Caddy gets and renews the certificate by itself (needs ports 80 and 443 reachable).
-{$DEMO_HOST:localhost} {
+{$DEMO_HOST:tools-fusion.tsquared.de} {
 	encode zstd gzip
 	request_body {
 		max_size 1MB

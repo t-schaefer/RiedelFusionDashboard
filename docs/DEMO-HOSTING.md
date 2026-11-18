@@ -6,15 +6,15 @@ internet behind HTTPS.
 
 ## What you need
 - A server with Docker (a VM is ideal; see "Where to run it").
-- A **fixed public IPv4** and a DNS name: an **A record** `demo.<your-domain>` -> that IPv4.
+- A **fixed public IPv4** and a DNS name: an **A record** `tools-fusion` in the zone `tsquared.de` -> that IPv4 (so the demo is `https://tools-fusion.tsquared.de`).
 - Ports **80 and 443** forwarded from the router/firewall to that server (80 is needed for the certificate).
 
 ## Start
 ```bash
-export DEMO_HOST=demo.example.com
+export DEMO_HOST=tools-fusion.tsquared.de      # optional - this is the default
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
-Open `https://demo.example.com/guide`. Update: `git pull` and the same command again.
+Open `https://tools-fusion.tsquared.de/guide`. Update: `git pull` and the same command again.
 Logs: `docker compose -f deploy/docker-compose.yml logs -f app`.
 
 ## What protects the public demo
