@@ -57,7 +57,7 @@
 <div id="appNav"></div>
 <main>
   <div class="subbar"><span class="muted">Change settings on devices that are already running.</span><span class="sp"></span>
-    <span class="muted">New device? <a href="/guide">Use the Guide</a></span> &middot; <a href="/config/advanced">Advanced editor</a> <span class="muted small">(profiles, everything at once)</span></div>
+    <span class="muted">Setting up a new device? <a href="/guide">Open New device</a></span> &middot; <a href="/config/advanced">Advanced editor</a> <span class="muted small">(profiles, everything at once)</span></div>
   <div id="main"></div>
   <a id="logout" class="hidden"></a>
 </main>
@@ -219,7 +219,7 @@ function renderDevices() {
   frame("1. Which devices?", "Tick the devices you want to change. They are read when you continue, so you always see their real values.",
     `<div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input type="text" id="flt" placeholder="Filter by name, address, tag..." value="${esc(S.filter)}" style="flex:1;min-width:200px">
       <button id="all">Select all shown</button><button id="none" class="ghost">None</button></div>${chips}
-     <table><thead><tr><th style="width:34px"></th><th>Device</th><th>Type / firmware</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No devices. Add them in the dashboard or with the Guide.</td></tr>'}</tbody></table>
+     <table><thead><tr><th style="width:34px"></th><th>Device</th><th>Type / firmware</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No devices. Add them in the dashboard or with New device.</td></tr>'}</tbody></table>
      <p class="muted small" id="selInfo"></p>`,
     navRow(false, true, "Read and continue", !S.sel.size));
   const info = () => { $("#selInfo").textContent = S.sel.size ? S.sel.size + " device(s) selected" : "Nothing selected yet."; const nx = $("#navNext"); if (nx) nx.disabled = !S.sel.size; };

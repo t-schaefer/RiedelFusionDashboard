@@ -1,6 +1,6 @@
 @echo off
 rem Starts the Fusion Dashboard in DEMO mode: simulated devices, nothing real is touched, no login needed.
-rem One factory-fresh unit to set up with the Guide (MAC 40:A3:6B:A2:16:14) and two finished ones in monitoring.
+rem One factory-fresh unit to set up with New device (MAC 40:A3:6B:A2:16:14) and two finished ones in monitoring.
 rem Runs in this window (no service, no admin rights) on http://127.0.0.1:8190/ - close the window to stop it.
 rem All demo data lives in fusion-dashboard-service\demo-data and is wiped at every start.
 setlocal

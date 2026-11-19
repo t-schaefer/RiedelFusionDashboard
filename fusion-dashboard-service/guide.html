@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guided Setup - Fusion Dashboard</title>
+<title>New Device - Fusion Dashboard</title>
 <link rel="stylesheet" href="/app.css">
 <style>
   main { max-width: 920px; margin: 0 auto; padding: 18px 16px 70px; }
@@ -111,7 +111,7 @@ async function reloadDevice() { const d = await api("/api/guide/device", { mac }
 // ------------------------------------------------------------------ shell
 function subbar() {
   const on = (v) => view === v ? "on" : "";
-  $("#subbar").innerHTML = `<span class="crumb">Guided setup</span><button class="${on("home")}" id="sbHome">Devices</button><button class="${on("site")}" id="sbSite">Site settings</button>` +
+  $("#subbar").innerHTML = `<span class="crumb">New device</span><button class="${on("home")}" id="sbHome">Devices</button><button class="${on("site")}" id="sbSite">Site settings</button>` +
     (view === "device" ? `<span class="crumb">&rsaquo; ${esc(DEV ? (DEV.name || (DEV.facts || {}).hostname || DEV.mac) : "New device")}</span>` : "");
   $("#sbHome").onclick = () => { view = "home"; mac = null; DEV = null; curStep = null; render(); };
   $("#sbSite").onclick = () => { siteReturn = view === "device" ? "device" : "home"; view = "site"; render(); };
@@ -130,8 +130,8 @@ async function renderHome() {
   const siteWarn = SITE.configured ? "" : `<div class="box warn"><b>Start here:</b> fill in the <a href="#" id="goSite">Site settings</a> once (syslog, NMOS, PTP, and how many audio streams your site uses). Every device is then configured from them.</div>`;
   $("#main").innerHTML = `
     <div class="card">
-      <h2>Set up a Fusion</h2>
-      <p class="why">This guide takes you from a factory-fresh unit to a configured, monitored device in five steps. It shows only what is needed at each step, and checks every change by reading it back.</p>
+      <h2>Set up a new Fusion</h2>
+      <p class="why">This page takes you from a factory-fresh unit to a configured, monitored device in five steps. It shows only what is needed at each step, and checks every change by reading it back.</p>
       ${siteWarn}
       ${MODE.demo ? `<div class="box info"><b>Demo:</b> the simulated factory unit has the MAC <span class="mono">${esc((MODE.hints || {}).mac)}</span>. Two finished devices are already listed below and in the dashboard.</div>` : ""}
       <div class="actions"><button class="primary" id="btnNew" ${SITE.configured ? "" : "disabled"}>Set up a new device</button></div>
@@ -142,14 +142,18 @@ async function renderHome() {
         const nm = x.name || (x.facts && x.facts.hostname) || x.mac;
         return `<div class="dev"><div style="flex:1;min-width:200px"><b>${esc(nm)}</b><div class="small muted">${esc(x.ip)} &middot; ${esc((x.facts || {}).serial || "")} &middot; ${esc(x.mac)}</div></div>
           <div class="bar"><div style="width:${done * 100 / STEPS.length}%"></div></div><span class="small muted">${done}/${STEPS.length}</span>
-          <button data-open="${esc(x.mac)}">${x.next ? "Continue" : "Open"}</button><button class="ghost" data-forget="${esc(x.mac)}" title="Remove this setup record (the device itself is not touched)">Remove</button></div>`;
+          <button data-open="${esc(x.mac)}">${x.next ? "Continue" : "Open"}</button><button class="ghost" data-forget="${esc(x.mac)}" title="Removes only this entry from the list. The device itself and its dashboard entry are not touched.">Remove from list</button></div>`;
       }).join("") : `<p class="muted">No devices yet.</p>`}
     </div>
     <div class="card small muted"><b>Roadmap:</b> firmware check and update, German user interface, "what to do" hints on dashboard warnings.</div>`;
   const g = $("#goSite"); if (g) g.onclick = (e) => { e.preventDefault(); siteReturn = "home"; view = "site"; render(); };
   const nb = $("#btnNew"); if (nb) nb.onclick = () => { mac = null; DEV = null; form = {}; ovr = { services: {}, channels: {} }; Object.keys(RESULT).forEach(k => delete RESULT[k]); curStep = "connect"; view = "device"; renderDevice(); };
   document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => run("Opening", () => openDevice(b.dataset.open)));
-  document.querySelectorAll("[data-forget]").forEach(b => b.onclick = () => { if (confirm("Remove this setup record? The device itself and its dashboard entry are not touched.")) run("Removing", async () => { await api("/api/guide/forget", { mac: b.dataset.forget }); render(); }); });
+  // two clicks instead of a pop-up (pop-ups are blocked or invisible in some browsers)
+  document.querySelectorAll("[data-forget]").forEach(b => b.onclick = () => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "Really remove?"; b.classList.add("danger"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Remove from list"; b.classList.remove("danger"); } }, 4000); return; }
+    run("Removing", async () => { await api("/api/guide/forget", { mac: b.dataset.forget }); render(); });
+  });
 }
 async function openDevice(m) {
   mac = m; await reloadDevice(); remember();
@@ -331,7 +335,7 @@ function netHtml(n, target, my, p) {
       <div style="max-width:200px"><label>Address for this computer</label><input type="text" id="myAddr" value="${esc(my)}"></div></div>
     <div class="small muted">The address must be free and in the device's network (prefix /${p}).</div>
     <div id="netCmds">${netCmds(n.system, "", my, p)}</div>
-    <div class="small muted">Copy and run these yourself - the Guide never changes your computer's network settings. <b>Via a switch:</b> the switch port must be an access port in the VLAN of that network, and so must the computer's port. The Guide cannot configure switches; the direct OOB cable avoids the question.</div></div>`;
+    <div class="small muted">Copy and run these yourself - this page never changes your computer's network settings. <b>Via a switch:</b> the switch port must be an access port in the VLAN of that network, and so must the computer's port. The Guide cannot configure switches; the direct OOB cable avoids the question.</div></div>`;
 }
 function factsHtml(d) {
   const f = d.facts, ch = (f.channels || []).filter(c => c.type === "decapsulator").length, tx = (f.channels || []).length - ch;

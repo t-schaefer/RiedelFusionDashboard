@@ -1,10 +1,10 @@
-/* Top navigation shared by Dashboard, Guide and Expert config. Put <div id="appNav"></div> first in <body>. */
+/* Top navigation shared by Dashboard, New device and Expert config. Put <div id="appNav"></div> first in <body>. */
 (function () {
   var host = document.getElementById("appNav");
   if (!host) return;
   var path = location.pathname.replace(/\/+$/, "") || "/";
   var here = path === "/config/advanced" ? "/config" : path;
-  var items = [["/", "Dashboard"], ["/guide", "Guide"], ["/config", "Expert config"]];
+  var items = [["/", "Dashboard"], ["/guide", "New device"], ["/config", "Expert config"]];
   function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function draw(mode) {
     var h = '<nav class="appnav"><a class="brand" href="/">Fusion Dashboard</a>';

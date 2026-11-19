@@ -335,4 +335,4 @@ def seed(log):
         if not out.get("ok"):
             raise RuntimeError("demo hand-over failed: %s" % out)
         fd.up_since = time.time() - (5 if d["base_type"] == "FusioN6" else 2) * 86400
-    log("demo: ready - open the Guide to set up the third device (MAC %s)" % FACTORY_MAC)
+    log("demo: ready - open 'New device' to set up the third device (MAC %s)" % FACTORY_MAC)

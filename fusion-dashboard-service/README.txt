@@ -151,23 +151,23 @@ Demo mode - a safe system to look at and to show
     Start-Demo-FusionDashboard.bat      (or:  python server.py --demo [--port 8190] [--host 0.0.0.0])
 Starts the whole service against SIMULATED devices on http://127.0.0.1:8190/ - nothing real is
 touched, no login is needed, and all data lives in demo-data/ (wiped at every start). It has:
-    - one factory-fresh Fusion to set up with the Guide: MAC 40:A3:6B:A2:16:14 (the Guide offers
+    - one factory-fresh Fusion to set up with "New device": MAC 40:A3:6B:A2:16:14 (the Guide offers
       "Fill it in" / "Fill in demo values" buttons in demo mode), and
     - two finished devices already in monitoring: a Fusion (Studio A Gateway) and a MuoN (Studio B
       Decoder, with one info note). They are not painted on: at start they are commissioned through
-      the very same Guide code an engineer uses.
-After the Guide hands the third device over it shows up in the dashboard (group "Studio C").
+      the very same code an engineer uses.
+After "New device" hands the third device over it shows up in the dashboard (group "Studio C").
 The simulated devices follow the settings catalog; they prove that the tool works, not that a real
 unit accepts every write. Tests: python tools/test_guide.py.
 
-One look on every page: Dashboard, Guide and Expert config share the top navigation and the same
+One look on every page: Dashboard, New device and Expert config share the top navigation and the same
 colours (light and dark follow the system). Extra links in the navigation (e.g. MN SET, port 8080)
 come from EXTRA_LINKS in server.py (not shown in demo mode); the dashboard's device groups come from
 GROUP_RULES in server.py, or from the built-in rules of the dashboard page when that is None.
 
-Guided setup (/guide) - commissioning a new Fusion step by step
+New device (/guide, formerly "Guide") - commissioning a new Fusion step by step
 -----------------------------------------------------------------
-"Guide" button in the header, or http://<this PC>:8090/guide. A step-by-step
+"New device" button in the header, or http://<this PC>:8090/guide. A step-by-step
 assistant for an engineer who sets up a Fusion from factory state and then
 hands it over to monitoring. It only shows what is needed at each step, a step
 stays locked until the one before is done, and every write is read back:
@@ -179,7 +179,7 @@ stays locked until the one before is done, and every write is read back:
                        (known) / address unknown (read-only search of one network,
                        max. a /23). "Check this computer's network" shows whether
                        this PC/Mac can reach the device and, if not, the commands
-                       to add a temporary address (copy them yourself - the Guide
+                       to add a temporary address (copy them yourself - this page
                        never changes the PC's network or a switch).
     2 Name & network   hostname, tag, Red IP/prefix/gateway (Blue derived from Red),
                        VLANs. Checks addresses and that no dashboard device uses them.
@@ -203,7 +203,7 @@ config tool's read / plan / apply / read-back code, so the same safety applies. 
 flagged "unverified" are not yet confirmed on a unit; the multicast addresses are not
 set here (routing assigns them, or use Expert config). Roadmap: docs/ROADMAP.md.
 
-Navigation inside the Guide: every step has Back / Next (Next unlocks when the step is done), the
+Navigation inside New device: every step has Back / Next (Next unlocks when the step is done), the
 step bar is clickable for steps that are unlocked, a finished step can be run again, "Site
 settings" can be opened from a step and returns to it, and a device's setup record can be removed
 on the Devices page. Per device you can override the site values for services (syslog, NMOS, PTP,
