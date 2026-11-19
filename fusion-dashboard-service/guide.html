@@ -368,20 +368,38 @@ function bodyIdentity() {
     <h3>Blue network (backup)</h3><p class="muted small">Left empty, Blue is derived from Red (second octet + ${SITE.network.blue_octet_offset}).</p>
     <div class="row"><div>${inp("blue_ip", "IP address", "empty = derived")}</div><div>${inp("blue_prefix", "Prefix length", "empty = same as Red", "number")}</div><div>${inp("blue_gateway", "Gateway", "empty = derived")}</div></div>
     <details><summary>VLANs (default from the site settings)</summary><div class="row"><div>${inp("red_vlan", "Red VLAN", "0 = untagged", "number")}</div><div>${inp("blue_vlan", "Blue VLAN", "0 = untagged", "number")}</div></div></details>
-    ${serialGuard("sure")}<div class="actions"><button id="preview">Show what will change</button><button class="danger" id="write" disabled title="Press 'Show what will change' first">Write to device</button></div><div id="planOut2"></div>`;
+    ${serialGuard("sure")}<div class="actions"><button class="danger" id="write" disabled title="Fill in the fields first">Write to device</button><button class="ghost" id="preview">Update preview</button><span id="pvState" class="small muted"></span></div><div id="planOut2"></div>`;
   const collect = () => { ["name", "tag", "red_ip", "red_prefix", "red_gateway", "blue_ip", "blue_prefix", "blue_gateway", "red_vlan", "blue_vlan"].forEach(k => form[k] = $("#" + k).value.trim()); return form; };
-  const fd = $("#fillDemoId"); if (fd) fd.onclick = () => { Object.entries(MODE.hints.identity).forEach(([k, v]) => { $("#" + k).value = v; }); };
-  $("#preview").onclick = () => run("Reading the device", async () => {
-    $("#write").disabled = true; $("#write").dataset.was = "1";
-    const r = await api("/api/guide/plan", { mac, step: "identity", inputs: collect() });
-    const i = r.inputs;
-    $("#planOut2").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
-      <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>`;
-    $("#write").disabled = false; $("#write").dataset.was = "0"; $("#write").title = "";
-    $("#write").onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); run("Writing", async () => {
-      await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
-      await reloadDevice(); renderDevice(); }); };
-  });
+  const setWrite = (on, why) => { const w = $("#write"); w.disabled = !on; w.dataset.was = on ? "0" : "1"; w.title = on ? "" : (why || ""); };
+  let timer = null, seq = 0;
+  // The preview builds itself while you type: no extra click needed before "Write to device".
+  const preview = async () => {
+    const mine = ++seq; collect(); setWrite(false, "Waiting for a valid preview");
+    if (!form.name || !form.red_ip || !form.red_gateway) {
+      $("#pvState").textContent = ""; $("#planOut2").innerHTML = `<p class="muted small">Fill in the name, the Red IP address and the gateway - the preview appears here by itself.</p>`; setWrite(false, "Fill in the fields first"); return;
+    }
+    $("#pvState").innerHTML = '<span class="spin">Checking</span>';
+    try {
+      const r = await api("/api/guide/plan", { mac, step: "identity", inputs: form });
+      if (mine !== seq) return;                       // an older answer, you have typed on since
+      const i = r.inputs;
+      $("#planOut2").innerHTML = `<h3>This will be written</h3>${rowsHtml(r.rows)}
+        <div class="box warn"><b>The device gets new addresses.</b> After writing, it answers on <code>${esc(i.red_ip)}</code> (Red) and <code>${esc(i.blue_ip)}</code> (Blue).${viaMedia() ? ` It will <b>no longer answer on <code>${esc(DEV.ip)}</code></b>, so this connection ends.` : " The OOB connection you are using stays as it is."} Your computer must be able to reach the new network afterwards.</div>`;
+      setWrite(true); $("#pvState").textContent = "";
+    } catch (e) {
+      if (mine !== seq) return;
+      $("#pvState").textContent = ""; $("#planOut2").innerHTML = `<div class="box bad">${esc(e.message)}</div>`; setWrite(false, "Fix the problem above first");
+    }
+  };
+  const later = () => { clearTimeout(timer); setWrite(false, "Waiting for a valid preview"); timer = setTimeout(preview, 600); };
+  ["name", "tag", "red_ip", "red_prefix", "red_gateway", "blue_ip", "blue_prefix", "blue_gateway", "red_vlan", "blue_vlan"].forEach(k => $("#" + k).addEventListener("input", later));
+  const fd = $("#fillDemoId"); if (fd) fd.onclick = () => { Object.entries(MODE.hints.identity).forEach(([k, v]) => { $("#" + k).value = v; }); preview(); };
+  $("#preview").onclick = preview;
+  $("#write").onclick = () => { if (!$("#sure").checked) return showError("Please tick the box to confirm you are connected to the right device."); run("Writing", async () => {
+    clearTimeout(timer); collect();
+    await api("/api/guide/apply", { mac, step: "identity", inputs: form, serial: DEV.facts.serial, confirm: true });
+    await reloadDevice(); renderDevice(); }); };
+  preview();
 }
 function viaMedia() { const f = DEV.facts || {}; return [f.e1, f.e2].some(x => x && String(x).split("/")[0] === DEV.ip); }
 function renderWaiting() {

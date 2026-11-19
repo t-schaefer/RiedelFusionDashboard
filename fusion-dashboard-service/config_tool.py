@@ -32,6 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PROFILES_DIR = BASE_DIR / "config-profiles"
 BACKUPS_DIR = BASE_DIR / "config-backups"
 UI_FILE = BASE_DIR / "config_ui.html"
+ADV_FILE = BASE_DIR / "config_adv.html"
 AUTH_FILE = BASE_DIR / "auth.json"
 
 API = "/emsfp/node/v1/"
@@ -736,6 +737,8 @@ class ConfigRoutes:
             return True
         if path in ("/config", "/config/"):
             self._cfg_html(UI_FILE.read_text(encoding="utf-8"))
+        elif path == "/config/advanced":
+            self._cfg_html(ADV_FILE.read_text(encoding="utf-8"))
         elif path == "/api/config/catalog":
             self._cfg_json({"catalog": cat.CATALOG, "scopes": cat.SCOPES, "auth": password_configured()})
         elif path == "/api/config/devices":

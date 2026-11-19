@@ -344,6 +344,10 @@ def connect(ip):
     if not ip:
         raise ValueError("enter the device address")
     try:
+        ipaddress.IPv4Address(ip)
+    except ValueError:
+        raise ValueError("'%s' is not an IPv4 address - use the form 10.20.1.11" % ip)
+    try:
         read = ct.read_device(ip)
     except Exception as e:
         raise ValueError("cannot reach %s (%s). Check the cable, that your computer is on the same network, and the address." % (ip, e))

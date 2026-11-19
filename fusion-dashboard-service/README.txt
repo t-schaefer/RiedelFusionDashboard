@@ -23,7 +23,7 @@ devices.seeded.json         (auto-created, not in git) remembers which devices.e
                               entries were already offered to devices.json - see "New devices"
 channel-names.json            router button name per device receiver channel (see "Button names")
 build_channel_names.py        regenerates channel-names.json from a Cerebrum destination-table export
-config_tool.py, config_catalog.py, config_ui.html, config-profiles/
+config_tool.py, config_catalog.py, config_ui.html, config_adv.html, config-profiles/
                               the device config page (see "Device config")
 install-task-windows.ps1      one-time setup: registers the Windows Scheduled Task
 uninstall-task-windows.ps1    removes the scheduled task and firewall rule again
@@ -211,6 +211,15 @@ IGMP) and the audio layout. Try it without hardware: demo mode (above).
 
 Device config (the former MuoN Config Tool) - /config
 -------------------------------------------------------
+/config is now a simple three-step page: 1 pick the devices (they are read when you
+continue), 2 pick a topic (Name & network, Time, Syslog, NMOS, System, SDI outputs, SDI audio,
+Clean switch, Streams, SFP ports) and type new values - an empty field keeps the current
+value, no ticking, no profiles - 3 review the per-device list (now -> new), tick the box next
+to "Write to devices". Per-device settings (hostname, addresses) and per-instance values
+(one SDI output, one stream) are offered when exactly one device is selected. Every write
+is backed up first and read back. The complete profile-based editor described below is
+still there as http://<this PC>:8090/config/advanced ("Advanced editor" link).
+
 Batch configuration of MuoN cards and Fusion gateways, built into this
 dashboard: "Config" button in the header, or http://<this PC>:8090/config.
 It is the old MuoN Config Tool (RiedelMuoNConfig) moved in, so the dashboard
