@@ -164,6 +164,11 @@ One look on every page: Dashboard, New device and Expert config share the top na
 colours (light and dark follow the system). Extra links in the navigation (e.g. MN SET, port 8080)
 come from EXTRA_LINKS in server.py (not shown in demo mode); the dashboard's device groups come from
 GROUP_RULES in server.py, or from the built-in rules of the dashboard page when that is None.
+Confirmations and messages are shown IN the page (app-ui.js), not as browser pop-ups: a dialog
+with a safe default (Cancel has the focus, Esc cancels) for reboot / resets / colour bars / SDI
+bit rate / address writes, and notes in the corner for results (errors stay until closed). Opening
+a device row loads its colour bars and stream rates by itself; the stream rates then refresh every
+10 s while the row is open, and a channel with sequence errors is expanded by default.
 
 New device (/guide, formerly "Guide") - commissioning a new Fusion step by step
 -----------------------------------------------------------------

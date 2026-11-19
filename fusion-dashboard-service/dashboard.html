@@ -501,7 +501,25 @@ function toggleDetail(ip) {
     if (detail) detail.classList.toggle("hidden");
     const row = document.getElementById("row-" + cssId(ip));
     if (row && detail) row.classList.toggle("open", !detail.classList.contains("hidden"));
+    if (detail && !detail.classList.contains("hidden")) autoLoadDetail(ip);
 }
+
+// Opening a row loads its colour bars and stream rates by itself (only for that one device), and the stream
+// rates keep refreshing while the row stays open. No extra "Load" click.
+const loadingNow = {};
+function autoLoadDetail(ip) {
+    const dev = lastData && lastData.devices.find(d => d.ip === ip), id = cssId(ip);
+    if (dev && dev.status === "offline") return;
+    if (!colorBarCache[ip]) loadColorBars(ip, id);
+    if (!streamCache[ip]) loadStreams(ip, id);
+}
+setInterval(() => {
+    if (document.hidden || !lastData) return;
+    lastData.devices.forEach(d => {
+        const det = document.getElementById("detail-" + cssId(d.ip));
+        if (det && !det.classList.contains("hidden") && d.status !== "offline" && streamCache[d.ip]) loadStreams(d.ip, cssId(d.ip), true);
+    });
+}, 10000);
 
 function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -510,7 +528,7 @@ function escapeHtml(text) {
 function cssId(ip) { return ip.replace(/\./g, "-"); }
 
 async function removeDevice(ip, name) {
-    if (!confirm(
+    if (!await UI.confirm(
         "Remove " + name + " (" + ip + ") from the dashboard?\n\n" +
         "It stops being polled and disappears from the list. The device itself is not touched. " +
         "You can add it again any time with \"+ Device\"."
@@ -529,7 +547,7 @@ async function removeDevice(ip, name) {
 }
 
 async function rebootDevice(ip) {
-    if (!confirm(
+    if (!await UI.confirm(
         "Reboot device " + ip + "?\n\n" +
         "This restarts the unit and will interrupt its SDI/IP signal for a short " +
         "time. Only do this if you know this device is safe to take down right now.\n\n" +
@@ -660,13 +678,13 @@ function renderRow(dev) {
           ${sdiBitrateHtml(dev, id)}
           <div>
             <div class="small" style="font-weight:600; margin-bottom:4px;">
-              Color bars <button class="btn" id="colorBarLoad-${id}">${colorBarCache[dev.ip] ? "↻ Refresh" : "Load"}</button>
+              Color bars <button class="btn" id="colorBarLoad-${id}" title="Read the colour-bar state again">↻ Refresh</button>
             </div>
             <div id="colorBarBody-${id}">${colorBarSectionHtml(dev.ip, id)}</div>
           </div>
           <div>
             <div class="small" style="font-weight:600; margin-bottom:4px;">
-              Stream rates <button class="btn" id="streamsLoad-${id}">${streamCache[dev.ip] ? "↻ Refresh" : "Load"}</button>
+              Stream rates <button class="btn" id="streamsLoad-${id}" title="Read the stream rates again (they also refresh every 10 s while this row is open)">↻ Refresh</button>
               <button class="btn danger" id="countersResetAll-${id}" title="Clears the packet / sequence-error counters of every flow on this device at once (not the streams themselves)">Reset all counters</button>
             </div>
             <div id="streamsBody-${id}">${streamsSectionHtml(dev.ip)}</div>
@@ -878,8 +896,8 @@ async function setDeviceSyslogEnable(ip, enable, checkboxEl) {
     }
 }
 
-// Color bars and stream rates are fetched on demand (only when a device's
-// row is expanded and "Load" is clicked), never as part of the recurring
+// Color bars and stream rates are fetched on demand (only for a device whose
+// row is expanded - it loads by itself then), never as part of the recurring
 // poll - both can involve several extra calls per device, so pulling them
 // for all 107 devices continuously would add real load for data almost
 // nobody is looking at right now. Results are cached client-side so they
@@ -890,18 +908,18 @@ let streamGroupOpen = {}; // "<ip>|<channel>" -> true when that CH group is expa
 
 function colorBarSectionHtml(ip, id) {
     const cached = colorBarCache[ip];
-    if (!cached) return '<span class="muted small">not loaded</span>';
+    if (!cached) return '<span class="muted small">loading...</span>';
     if (!cached.outputs || !cached.outputs.length) return '<span class="muted small">no SDI outputs found</span>';
     return '<table class="mini-table">' +
         '<thead><tr><th>Output</th><th>Color bars</th></tr></thead><tbody>' +
-        cached.outputs.map(o => `<tr><td>${o.label || o.id}</td><td><input type="checkbox" class="colorBarCheck" data-ip="${ip}" data-out="${o.id}" ${o.color_bar ? "checked" : ""}></td></tr>`).join("") +
+        cached.outputs.map((o, n) => `<tr><td title="${o.id}">${o.label || "SDI output " + (n + 1)}</td><td><input type="checkbox" class="colorBarCheck" data-ip="${ip}" data-out="${o.id}" ${o.color_bar ? "checked" : ""}></td></tr>`).join("") +
         "</tbody></table>" +
         `<div class="muted small" style="margin-top:4px">via ${cached.network || "?"}</div>`;
 }
 
 function streamsSectionHtml(ip) {
     const cached = streamCache[ip];
-    if (!cached) return '<span class="muted small">not loaded</span>';
+    if (!cached) return '<span class="muted small">loading...</span>';
     if (!cached.streams || !cached.streams.length) return '<span class="muted small">no active streams found</span>';
 
     // One group per logical channel (CH01 ...), holding all its streams
@@ -929,9 +947,10 @@ function streamsSectionHtml(ip) {
               `<button class="btn channelResetBtn" data-channel="${channel}" data-mode="counters" title="Clear the counters of ALL flows of ${label} (every stream, pri + sec)">Clr ${label}</button> ` +
               `<button class="btn danger channelResetBtn" data-channel="${channel}" data-mode="flow" title="Reset ALL flows of ${label} (every stream, pri + sec) - may glitch the whole channel">Reset ${label}</button>`
             : "";
-        const open = !!streamGroupOpen[ip + "|" + channel];
+        // a channel with sequence errors is open by default - that is what you came to look at
+        const open = (ip + "|" + channel) in streamGroupOpen ? !!streamGroupOpen[ip + "|" + channel] : seqErr > 0;
         const btnName = rows[0].label ? escapeHtml(rows[0].label) : "";
-        body += `<tr class="chHead" data-ch="${channel}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""}${btnName ? ` <span style="color:var(--accent)">${btnName}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:var(--bad-strong);" : "color:var(--muted);"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
+        body += `<tr class="chHead" data-ch="${channel}" data-def="${seqErr > 0 ? 1 : 0}" style="cursor:pointer" title="Click to ${open ? "collapse" : "expand"} ${label}"><td colspan="5"><span class="chArrow">${open ? "\u25BE" : "\u25B8"}</span> ${label}${dir ? ` <span class="muted">${dir}</span>` : ""}${btnName ? ` <span style="color:var(--accent)">${btnName}</span>` : ""} <span class="muted">- ${rows.length} flows,</span> <span style="${seqErr > 0 ? "color:var(--bad-strong);" : "color:var(--muted);"}">${seqErr} seq err</span></td><td>${chBtns}</td></tr>`;
         body += rows.map(s => `<tr class="chRow${open ? "" : " hidden"}" data-ch="${channel}"><td>${s.name || "-"}${s.label ? ` <span class="muted">${escapeHtml(s.label)}</span>` : ""}</td><td>${s.leg || "-"}</td><td class="muted" title="${s.flow || ""}">${s.flow ? String(s.flow).slice(0, 8) : "-"}</td><td>${s.pkt_rate ?? "-"}</td><td>${s.sequence_error ?? "-"}</td><td>${flowBtns(s)}</td></tr>`).join("");
     });
     return `<div style="max-height:320px; overflow-y:auto;"><table class="mini-table">` +
@@ -964,7 +983,7 @@ function wireFlowResetButtons(ip, id) {
             ev.stopPropagation();
             if (ev.target.closest("button")) return;
             const key = ip + "|" + head.dataset.ch;
-            const open = !streamGroupOpen[key];
+            const open = !((key in streamGroupOpen) ? streamGroupOpen[key] : head.dataset.def === "1");
             streamGroupOpen[key] = open;
             head.querySelector(".chArrow").textContent = open ? "\u25BE" : "\u25B8";
             head.title = "Click to " + (open ? "collapse" : "expand") + " CH" + String(head.dataset.ch).padStart(2, "0");
@@ -979,7 +998,7 @@ async function resetChannel(ip, id, channel, mode) {
     const msg = mode === "flow"
         ? "Reset ALL flows of " + label + " on " + ip + "?\n\nEvery stream of this channel (video, audio, data - primary and secondary) is reset, not just its counters. The whole channel may glitch or drop out briefly while it re-locks. Only do this if you know it's safe right now." + caveat
         : "Clear the counters of ALL flows of " + label + " on " + ip + "?\n\nEvery stream of this channel (video, audio, data - primary and secondary) gets its packet / sequence-error counters cleared; the streams themselves aren't touched." + caveat;
-    if (!confirm(msg)) return;
+    if (!await UI.confirm(msg)) return;
     try {
         const res = await fetch("/api/devices/channel-reset", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -1032,7 +1051,7 @@ function wireSdiBitrate(dev, id) {
     document.getElementById("sdiBitrateApply-" + id).onclick = (ev) => { ev.stopPropagation(); applySdiBitrate(dev.ip, id, sel.value); };
 }
 async function applySdiBitrate(ip, id, value) {
-    if (!confirm(
+    if (!await UI.confirm(
         "Set the SDI bitrate of " + ip + " to \"" + value + "\"?\n\n" +
         "This is the global SDI operating bit rate of the whole device (integer = 50/60 Hz families, fractional = 59.94 / 29.97, auto = follow the signal). " +
         "The SDI outputs may re-lock and glitch briefly. Only do this if the device is safe to touch right now."
@@ -1119,7 +1138,7 @@ async function openAddressEditor(ip, id, channel) {
         });
         const changes = Object.values(byFlow);
         const msg = document.getElementById("addrMsg");
-        if (!confirm("Write the new address / port to " + changes.length + " flow(s) of " + label + " on " + ip + "?\n\nOn a receiver this changes which multicast group it joins; on a sender it changes where it transmits. A running stream will drop out while the address changes.")) return;
+        if (!await UI.confirm("Write the new address / port to " + changes.length + " flow(s) of " + label + " on " + ip + "?\n\nOn a receiver this changes which multicast group it joins; on a sender it changes where it transmits. A running stream will drop out while the address changes.")) return;
         msg.textContent = "Saving...";
         try {
             const res = await fetch("/api/devices/channel-addresses", {
@@ -1138,7 +1157,7 @@ async function openAddressEditor(ip, id, channel) {
 
 async function enableChannel(ip, id, channel) {
     const label = "CH" + String(channel).padStart(2, "0");
-    if (!confirm(
+    if (!await UI.confirm(
         "Enable ALL flows of " + label + " on " + ip + "?\n\n" +
         "Every stream of this channel (video, audio, data - primary and secondary) is switched on. " +
         "On a receiver this makes it join the multicast groups already entered on its flows; on a sender it starts sending. " +
@@ -1171,7 +1190,7 @@ async function resetFlow(ip, id, flowId, mode) {
     const msg = mode === "flow"
         ? "Reset flow " + short + " on " + ip + "?\n\nThis resets the flow itself, not just its counters - that stream may glitch or drop out briefly while it re-locks. Only do this if you know it's safe right now." + caveat
         : "Clear the counters of flow " + short + " on " + ip + "?\n\nOnly the packet / sequence-error counters of this one flow are cleared; the stream itself isn't touched." + caveat;
-    if (!confirm(msg)) return;
+    if (!await UI.confirm(msg)) return;
     try {
         const res = await fetch("/api/devices/flow-reset", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -1192,9 +1211,9 @@ async function resetFlow(ip, id, flowId, mode) {
 }
 
 async function resetAllCounters(ip, id) {
-    if (!confirm(
+    if (!await UI.confirm(
         "Clear the packet / sequence-error counters of ALL flows on " + ip + "?\n\n" +
-        "Only counters are cleared, not the streams. To do a single flow instead, load Stream rates and use the per-row buttons.\n\n" +
+        "Only counters are cleared, not the streams. To do a single flow instead, use the buttons in the stream rates list.\n\n" +
         "This request is inferred from the device's field names (self/system counters_reset) and has not been confirmed on a live unit."
     )) return;
     try {
@@ -1233,11 +1252,16 @@ async function loadColorBars(ip, id) {
     wireColorBarCheckboxes(ip, id);
 }
 
-async function loadStreams(ip, id) {
+async function loadStreams(ip, id, silent) {
+    if (loadingNow[ip]) return;
+    loadingNow[ip] = true;
     const body = document.getElementById("streamsBody-" + id);
     const btn = document.getElementById("streamsLoad-" + id);
-    if (btn) { btn.disabled = true; }
-    if (body) body.innerHTML = '<span class="muted small">loading...</span>';
+    const scroller = body && body.firstElementChild, keepTop = scroller ? scroller.scrollTop : 0;
+    if (!silent) {
+        if (btn) { btn.disabled = true; }
+        if (body) body.innerHTML = '<span class="muted small">loading...</span>';
+    }
     try {
         const res = await fetch("/api/devices/streams?ip=" + encodeURIComponent(ip));
         const data = await res.json();
@@ -1247,22 +1271,24 @@ async function loadStreams(ip, id) {
             body.innerHTML = '<span class="muted small">failed: ' + (data.error || "unknown error") + "</span>";
         }
     } catch (e) {
-        if (body) body.innerHTML = '<span class="muted small">failed: ' + e.message + "</span>";
+        if (body && !silent) body.innerHTML = '<span class="muted small">failed: ' + e.message + "</span>";
     }
+    loadingNow[ip] = false;
     if (btn) btn.disabled = false;
-    if (body && streamCache[ip]) body.innerHTML = streamsSectionHtml(ip);
-    const loadBtn = document.getElementById("streamsLoad-" + id);
-    if (loadBtn) loadBtn.textContent = "↻ Refresh";
+    if (body && streamCache[ip]) {
+        body.innerHTML = streamsSectionHtml(ip);
+        const again = body.firstElementChild; if (again && keepTop) again.scrollTop = keepTop;
+    }
     wireFlowResetButtons(ip, id);
 }
 
 function wireColorBarCheckboxes(ip, id) {
     document.querySelectorAll('#colorBarBody-' + id + ' .colorBarCheck').forEach(cb => {
-        cb.onchange = (ev) => {
+        cb.onchange = async (ev) => {
             ev.stopPropagation();
             const outId = cb.dataset.out;
             const value = cb.checked;
-            if (value && !confirm(
+            if (value && !await UI.confirm(
                 "Turn ON color bars for " + ip + " / output " + outId + "?\n\n" +
                 "This replaces the live picture on that SDI output with a test " +
                 "pattern. Only do this if you know that output isn't on air right now."
@@ -1358,7 +1384,7 @@ document.getElementById("syslogForm").addEventListener("submit", async (ev) => {
     };
     const deviceCount = lastData.devices.length;
     if (!server || !port) return;
-    if (!confirm(
+    if (!await UI.confirm(
         "Apply syslog server " + server + ":" + port + " (enable=" + enable + ") plus the selected " +
         "Common/Decap monitoring flags to all " + deviceCount + " devices in the fleet?\n\n" +
         "This changes a live configuration value on every device at once."
@@ -1389,5 +1415,6 @@ setInterval(refresh, REFRESH_MS);
 </script>
     </div>
 <script src="/app-nav.js"></script>
+<script src="/app-ui.js"></script>
 </body>
 </html>

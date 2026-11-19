@@ -999,7 +999,8 @@ GROUP_RULES = None   # optional [{"re": "^Studio A", "label": "Studio A"}, ...];
 RATE_LIMIT, RATE_HITS, RATE_LOCK = 600, {}, threading.Lock()     # requests per minute per visitor (demo mode)
 RESET_MINUTES = 0                                                  # demo: exit after this many minutes (the container restarts it fresh)
 EXTRA_LINKS = [{"label": "MN SET", "url": "http://{host}:8080/"}]
-STATIC_FILES = {"/app.css": ("app.css", "text/css; charset=utf-8"), "/app-nav.js": ("app-nav.js", "application/javascript; charset=utf-8")}
+STATIC_FILES = {"/app.css": ("app.css", "text/css; charset=utf-8"), "/app-nav.js": ("app-nav.js", "application/javascript; charset=utf-8"),
+                "/app-ui.js": ("app-ui.js", "application/javascript; charset=utf-8")}
 
 
 class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestHandler):
