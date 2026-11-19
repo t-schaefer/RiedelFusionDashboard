@@ -239,7 +239,8 @@ def factory_addresses(mac_text):
 
 # ---------------------------------------------------------------- this computer's network (read only)
 def _run(cmd, timeout=6):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout or ""
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)      # Windows: no console window flashing up from the service
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, creationflags=flags).stdout or ""
 
 
 def host_interfaces():
