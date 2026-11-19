@@ -87,7 +87,10 @@ function showError(msg) {
 function clearError() { const b = $("#errBar"); if (b) b.remove(); }
 function busy(on, msg) {
   const b = $("#busy"); if (b) b.innerHTML = on ? `<span class="spin">${esc(msg || "Working")}</span>` : "";
-  document.querySelectorAll("#main button, #pend button").forEach(x => { if (on) x.dataset.was = x.disabled ? "1" : "0"; x.disabled = on ? true : x.dataset.was === "1"; });
+  document.querySelectorAll("#main button, #pend button").forEach(x => {
+    if (on) { x.dataset.was = x.disabled ? "1" : "0"; x.disabled = true; }
+    else if (x.dataset.was !== undefined) { x.disabled = x.dataset.was === "1"; delete x.dataset.was; }
+  });
 }
 async function run(msg, fn) { clearError(); busy(true, msg); try { await fn(); } catch (e) { showError(e.message); } finally { busy(false); } }
 

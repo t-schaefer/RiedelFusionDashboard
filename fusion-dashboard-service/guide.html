@@ -91,7 +91,11 @@ const currentStep = () => (DEV && DEV.next) || "verify";
 const stepNo = (id) => STEPS.findIndex(s => s.id === id) + 1;
 function setBusy(on, msg) {
   const b = $("#busyMsg"); if (b) b.innerHTML = on ? `<span class="spin">${esc(msg || "Working")}</span>` : "";
-  document.querySelectorAll("main button").forEach(x => { if (on) x.dataset.was = x.disabled ? "1" : "0"; x.disabled = on ? true : x.dataset.was === "1"; });
+  // Only buttons that existed when busy started are put back; buttons drawn meanwhile keep the state they were drawn with.
+  document.querySelectorAll("main button").forEach(x => {
+    if (on) { x.dataset.was = x.disabled ? "1" : "0"; x.disabled = true; }
+    else if (x.dataset.was !== undefined) { x.disabled = x.dataset.was === "1"; delete x.dataset.was; }
+  });
 }
 // Errors are shown in a bar on the page (not alert(): pop-ups are blocked or invisible in some browsers).
 function showError(msg) {
