@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# From the Mac, in the repository:  deploy/deploy-to-vm.sh [ssh-host]     (default: thorsten@tools)
+# From the Mac, in the repository:  deploy/deploy-to-vm.sh [ssh-host]     (default: thorsten@tools-fusion)
 # Copies the committed files to the VM (no GitHub login needed there), (re)starts the demo on port 8090
 # and publishes it with Tailscale Funnel.
 set -euo pipefail
-HOST="${1:-thorsten@tools}"
+HOST="${1:-thorsten@tools-fusion}"
 DIR=/opt/tools/fusion-dashboard
 cd "$(git rev-parse --show-toplevel)"
 

@@ -12,7 +12,7 @@ sudo usermod -aG docker "$USER"
 if ! command -v tailscale >/dev/null; then
   curl -fsSL https://tailscale.com/install.sh | sh
 fi
-sudo tailscale up --hostname "${TS_HOSTNAME:-tools}" --ssh
+sudo tailscale up --hostname "${TS_HOSTNAME:-tools-fusion}" --ssh
 
 sudo mkdir -p /opt/tools && sudo chown "$USER" /opt/tools
 echo "Done. Log out and in once (docker group). Tools live in /opt/tools/<name>."
