@@ -1039,7 +1039,7 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
     def do_GET(self):
         if self._throttled():
             return
-        if self.config_get() or self.guide_get():   # /config*, /guide, /api/config/*, /api/guide/* (password protected)
+        if self.config_get() or self.guide_get():   # /config*, /guide, /api/config/*, /api/guide/*
             return
         if self.path == "/" or self.path == "/index.html":
             try:
@@ -1063,7 +1063,7 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/mode":
-            self._send_json({"demo": DEMO, "links": [] if DEMO else EXTRA_LINKS, "auth": config_tool.password_configured() and not DEMO, "hints": DEMO_HINTS if DEMO else None, "groups": GROUP_RULES, "resetMinutes": RESET_MINUTES if DEMO else 0})
+            self._send_json({"demo": DEMO, "links": [] if DEMO else EXTRA_LINKS, "hints": DEMO_HINTS if DEMO else None, "groups": GROUP_RULES, "resetMinutes": RESET_MINUTES if DEMO else 0})
         elif self.path == "/api/state":
             raw, gz = state_payload()
             use_gz = "gzip" in self.headers.get("Accept-Encoding", "")
@@ -1364,22 +1364,7 @@ class Handler(config_tool.ConfigRoutes, guide_tool.GuideRoutes, BaseHTTPRequestH
             self.send_error(404)
 
 
-def set_config_password():
-    """`python server.py --set-password`: set the login password of the /config page."""
-    import getpass
-    pw = getpass.getpass("New config password: ")
-    if len(pw) < 8:
-        raise SystemExit("Password must be at least 8 characters.")
-    if pw != getpass.getpass("Repeat password: "):
-        raise SystemExit("Passwords don't match.")
-    config_tool.set_password(pw)
-    print("Password saved to %s. A running service picks it up for new logins right away." % config_tool.AUTH_FILE)
-
-
 def main():
-    if "--set-password" in sys.argv:
-        set_config_password()
-        return
     demo = "--demo" in sys.argv
     global RESET_MINUTES
     if "--reset-every" in sys.argv:

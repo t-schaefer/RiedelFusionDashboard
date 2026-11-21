@@ -59,7 +59,6 @@
   <div class="subbar"><span class="muted">Change settings on devices that are already running.</span><span class="sp"></span>
     <span class="muted">Setting up a new device? <a href="/guide">Open New device</a></span> &middot; <a href="/config/advanced">Advanced editor</a> <span class="muted small">(profiles, everything at once)</span></div>
   <div id="main"></div>
-  <a id="logout" class="hidden"></a>
 </main>
 <div id="pend" class="pendbar hidden"></div>
 <script src="/app-nav.js"></script>
@@ -74,7 +73,6 @@ const S = { step: "devices", sel: new Set(), filter: "", topic: null, vals: {}, 
 
 async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (res.status === 401 || (res.redirected && /login/.test(res.url))) { location.href = "/config/login"; throw new Error("login required"); }
   const data = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
   if (!res.ok || data.ok === false) throw new Error(data.error || "HTTP " + res.status);
   return data;

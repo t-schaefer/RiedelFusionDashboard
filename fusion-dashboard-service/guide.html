@@ -77,7 +77,6 @@ const RESULT = {};            // last result html per step
 
 async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (res.status === 401 || (res.redirected && /login/.test(res.url))) { location.href = "/config/login?next=/guide"; throw new Error("login required"); }
   const data = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
   if (!res.ok || data.ok === false) throw new Error(data.error || "HTTP " + res.status);
   return data;

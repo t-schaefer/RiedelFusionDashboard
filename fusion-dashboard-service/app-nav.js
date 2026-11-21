@@ -14,7 +14,6 @@
     });
     h += '<span class="sp"></span>';
     if (mode.demo) h += '<span class="pill" title="Simulated devices - nothing real is touched' + (mode.resetMinutes ? ". The demo starts over about every " + mode.resetMinutes + " minutes." : "") + '">DEMO</span>';
-    if (mode.auth && (here === "/config" || here === "/guide")) h += '<a class="out" href="/config/logout">Log out</a>';
     host.innerHTML = h + "</nav>";
   }
   draw({});

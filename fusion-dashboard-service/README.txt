@@ -203,8 +203,7 @@ stays locked until the one before is done, and every write is read back:
 class, VLANs, Blue offset, and how many audio streams the site uses with how many
 channels each (streams x channels <= 16). Stored in guide-site.json, progress per
 device in guide-state.json (both local, not in git).
-It uses the same login as /config (Set-ConfigPassword-FusionDashboard.bat) and the
-config tool's read / plan / apply / read-back code, so the same safety applies. Writes
+It uses the config tool's read / plan / apply / read-back code, so the same safety applies. Writes
 flagged "unverified" are not yet confirmed on a unit; the multicast addresses are not
 set here (routing assigns them, or use Expert config). Roadmap: docs/ROADMAP.md.
 
@@ -269,14 +268,10 @@ SDI bitrate and video format in the config tool:
     fields are device codes without a documented name - there is no
     "1080p50" button: read a flow that carries 1080p50 and copy its codes.
 
-Login: the Config page needs a password; the dashboard itself stays open.
-Set or change it by double-clicking Set-ConfigPassword-FusionDashboard.bat
-(salted PBKDF2 hash in auth.json, not in git; effective at once). One shared
-password, sessions last 12 h, 5 wrong attempts slow down further tries. As
-long as no password is set, /config only answers on the server PC itself.
-Coming from the old tool: copy its config-tool\auth.json to
-fusion-dashboard-service\auth.json to keep the password. The old service
-(task MuoNConfigToolService, port 8091) can then be stopped / uninstalled.
+Access: there is no login. The dashboard, /config and /guide are open to anyone who can
+reach the service (port 8090), and /config can write to the devices - keep it on a
+trusted network. A leftover fusion-dashboard-service\auth.json from earlier versions
+is no longer read and can be deleted.
 
 LLDP neighbours
 ----------------

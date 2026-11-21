@@ -17,7 +17,7 @@ tmp = Path(tempfile.mkdtemp(prefix="guide-test-"))
 (tmp / "profiles").mkdir()
 shutil.copy(os.path.join(ff.SERVICE, "config-profiles", "site-default.example.json"), tmp / "profiles")
 g.STATE_FILE, g.SITE_FILE = tmp / "state.json", tmp / "site.json"
-ct.AUTH_FILE, ct.PROFILES_DIR, ct.BACKUPS_DIR = tmp / "auth.json", tmp / "profiles", tmp / "backups"
+ct.PROFILES_DIR, ct.BACKUPS_DIR = tmp / "profiles", tmp / "backups"
 ct.BACKUPS_DIR.mkdir()
 ct.http_get, ct.http_post = ff.fake_get, ff.fake_post
 added = []

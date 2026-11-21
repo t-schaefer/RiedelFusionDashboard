@@ -299,7 +299,7 @@ def arg(name, default):
 
 
 def prepare(server):
-    """Switch the service to demo mode: simulated network, its own empty data folder, no login."""
+    """Switch the service to demo mode: simulated network, its own empty data folder."""
     if DEMO_DIR.exists():
         shutil.rmtree(DEMO_DIR, ignore_errors=True)
     (DEMO_DIR / "profiles").mkdir(parents=True)
@@ -309,8 +309,7 @@ def prepare(server):
     server.DEVICES_FILE, server.DEVICES_EXAMPLE_FILE, server.SEEDED_FILE = DEMO_DIR / "devices.json", DEMO_DIR / "none.json", DEMO_DIR / "seeded.json"
     server.DEVICES_FILE.write_text("[]", encoding="utf-8")
     guide_tool.STATE_FILE, guide_tool.SITE_FILE = DEMO_DIR / "guide-state.json", DEMO_DIR / "guide-site.json"
-    ct.AUTH_FILE, ct.PROFILES_DIR, ct.BACKUPS_DIR = DEMO_DIR / "auth.json", DEMO_DIR / "profiles", DEMO_DIR / "backups"
-    ct.OPEN_ACCESS = True            # simulated devices only: no login
+    ct.PROFILES_DIR, ct.BACKUPS_DIR = DEMO_DIR / "profiles", DEMO_DIR / "backups"
     install(server)
     guide_tool.save_site(DEMO_SITE)
     FakeDevice(FACTORY_MAC, "10.162.22.20")

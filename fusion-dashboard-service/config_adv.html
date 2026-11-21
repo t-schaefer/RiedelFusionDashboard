@@ -72,7 +72,6 @@
   <h1>Advanced editor</h1>
   <span class="muted small">Every setting at once, with profiles and per-device / per-I/O overrides. <a href="/config">&larr; Back to the simple view</a></span>
   <span class="status" id="status"></span>
-  <a id="logout" class="hidden"></a>
 </div>
 
 <div class="layout">
@@ -222,7 +221,6 @@ function status(msg) { $("#status").textContent = msg; }
 async function api(path, body) {
   path = path.replace(/^\/api\//, "/api/config/");   // served by the dashboard service
   const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (res.status === 401) { location.href = "/config/login"; throw new Error("login required"); }
   const data = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
   if (!res.ok || data.ok === false) throw new Error(data.error || ("HTTP " + res.status));
   return data;
@@ -903,7 +901,6 @@ function renderAll() { renderDevices(); renderDeviceSelects(); renderTab($("#tab
 (async function init() {
   const c = await api("/api/catalog");
   CATALOG = c.catalog; SCOPES = c.scopes; BY_ID = Object.fromEntries(CATALOG.map(s => [s.id, s]));
-  $("#logout").classList.toggle("hidden", !c.auth);
   datalists();
   $("#ioScope").innerHTML = Object.entries(SCOPES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
   profile = load("muon.profile", { values: {}, io: {} });

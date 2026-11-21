@@ -7,16 +7,13 @@ setting is only planned if the device's own GET response contains the field,
 a full backup is saved before the first write, and every changed field is
 read back and compared. What changed: it no longer runs its own web server -
 server.py routes /config and /api/config/* here (see ConfigRoutes) - the
-device list is the dashboard's, and the login password lives in auth.json
-next to server.py (set it with `python server.py --set-password`).
+device list is the dashboard's. There is no login: anyone who can reach the
+service can use /config.
 """
 
-import hashlib
-import hmac
 import json
 import logging
 import re
-import secrets
 import threading
 import time
 import urllib.error
@@ -24,7 +21,6 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qs
 
 import config_catalog as cat
 
@@ -33,7 +29,6 @@ PROFILES_DIR = BASE_DIR / "config-profiles"
 BACKUPS_DIR = BASE_DIR / "config-backups"
 UI_FILE = BASE_DIR / "config_ui.html"
 ADV_FILE = BASE_DIR / "config_adv.html"
-AUTH_FILE = BASE_DIR / "auth.json"
 
 API = "/emsfp/node/v1/"
 READ_CONCURRENCY = 8
@@ -43,13 +38,6 @@ READBACK_WAIT_SEC = 120
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 logger = logging.getLogger("fusion-dashboard")
-
-OPEN_ACCESS = False   # demo mode only: simulated devices, no login needed
-SESSION_COOKIE = "fusion_config_session"
-SESSION_TTL_SEC = 12 * 3600
-SESSIONS = {}  # token -> expiry (epoch); in memory, a restart logs everyone out
-FAILED_LOGINS = {}  # client ip -> (count, last attempt)
-AUTH_LOCK = threading.Lock()
 
 READS = {}  # ip -> last device read (see read_device)
 READS_LOCK = threading.RLock()
@@ -532,77 +520,6 @@ def capture(read, batch_only):
     return cur
 
 
-# ---------------------------------------------------------------- login
-
-def hash_password(password, salt):
-    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000).hex()
-
-
-def set_password(password):
-    salt = secrets.token_bytes(16)
-    AUTH_FILE.write_text(json.dumps({"salt": salt.hex(), "hash": hash_password(password, salt)}), encoding="utf-8")
-
-
-def password_configured():
-    return AUTH_FILE.exists()
-
-
-def check_password(password):
-    try:
-        auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-        return hmac.compare_digest(hash_password(password, bytes.fromhex(auth["salt"])), auth["hash"])
-    except Exception:
-        return False
-
-
-def new_session():
-    token = secrets.token_urlsafe(32)
-    with AUTH_LOCK:
-        SESSIONS[token] = time.time() + SESSION_TTL_SEC
-    return token
-
-
-def session_valid(token):
-    with AUTH_LOCK:
-        exp = SESSIONS.get(token)
-        if not exp or exp < time.time():
-            SESSIONS.pop(token, None)
-            return False
-        SESSIONS[token] = time.time() + SESSION_TTL_SEC  # sliding expiry
-        return True
-
-
-def login_delay(client):
-    """Seconds this client must still wait after repeated wrong passwords."""
-    count, last = FAILED_LOGINS.get(client, (0, 0))
-    if count < 5:
-        return 0
-    return max(0, int(last + min(300, 15 * (count - 4)) - time.time()))
-
-
-LOGIN_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Device Config - Login</title>
-<style>
- :root{--bg:#f4f5f7;--panel:#fff;--text:#1d2330;--muted:#6b7385;--line:#dde1e8;--accent:#2563eb;--bad:#b91c1c}
- @media (prefers-color-scheme: dark){:root{--bg:#13161c;--panel:#1b1f27;--text:#e4e7ee;--muted:#8d95a8;--line:#2c323e;--accent:#6d9bff;--bad:#f87171}}
- body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font:14px system-ui,"Segoe UI",sans-serif}
- form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(340px,calc(100vw - 32px))}
- h1{font-size:17px;margin:0 0 4px} p{color:var(--muted);margin:0 0 16px;font-size:13px}
- input{width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;font:inherit}
- button{margin-top:12px;width:100%;padding:8px;border:0;border-radius:6px;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
- .err{color:var(--bad);margin:10px 0 0;font-size:13px}
-</style></head><body><form method="post" action="/config/login">
-<h1>Device Config</h1><p>Writes configuration to broadcast devices. Password required.</p>
-<input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password">
-<input type="hidden" name="next" value="__NEXT__">
-<button type="submit">Log in</button>__ERROR__</form></body></html>"""
-
-NO_PASSWORD_PAGE = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Device Config</title></head>
-<body style="font:14px system-ui;padding:32px"><h1 style="font-size:17px">No password set</h1>
-<p>Remote access stays locked until a password is set. On the server, double-click
-<b>Set-ConfigPassword-FusionDashboard.bat</b> (or run <code>python fusion-dashboard-service\\server.py --set-password</code>).</p></body></html>"""
-
-
 # ---------------------------------------------------------------- HTTP API
 
 def read_many(ips):
@@ -627,13 +544,9 @@ def public_read(r):
 
 
 
-def login_html(error_html="", nxt=""):
-    return LOGIN_PAGE.replace("__ERROR__", error_html).replace("__NEXT__", nxt)
-
-
 class ConfigRoutes:
     """Mixed into the dashboard's request handler: serves the config page
-    (/config), its login (/config/login, /config/logout) and /api/config/*.
+    (/config) and /api/config/*.
     config_get / config_post return True when they handled the request."""
 
     def _cfg_json(self, obj, status=200):
@@ -663,84 +576,16 @@ class ConfigRoutes:
             self.send_header(k, v)
         self.end_headers()
 
-    def _cfg_is_local(self):
-        return self.client_address[0] in ("127.0.0.1", "::1")
-
-    def _cfg_token(self):
-        for part in (self.headers.get("Cookie") or "").split(";"):
-            k, _, v = part.strip().partition("=")
-            if k == SESSION_COOKIE:
-                return v
-        return ""
-
-    def _cfg_authorized(self):
-        """Password set -> everyone needs a session. No password yet ->
-        only this machine itself may use the config page."""
-        if OPEN_ACCESS:
-            return True
-        if not password_configured():
-            return self._cfg_is_local()
-        return session_valid(self._cfg_token())
-
-    def _cfg_deny(self):
-        path = self.path.split("?")[0]
-        if not password_configured():
-            if path.startswith("/api/"):
-                self._cfg_json({"ok": False, "error": "no password set - remote access locked"}, 403)
-            else:
-                self._cfg_html(NO_PASSWORD_PAGE, 403)
-        elif path.startswith("/api/"):
-            self._cfg_json({"ok": False, "error": "login required", "login": True}, 401)
-        else:
-            where = path if path in ("/guide",) else "/config"
-            self._cfg_redirect("/config/login" + ("?next=" + where if where != "/config" else ""))
-
-    def _cfg_login_post(self):
-        client = self.client_address[0]
-        length = int(self.headers.get("Content-Length", 0))
-        form = parse_qs(self.rfile.read(length).decode("utf-8", "replace"))
-        wait = login_delay(client)
-        if wait:
-            self._cfg_html(login_html(f'<p class="err">Too many attempts - wait {wait} s.</p>'), 429)
-            return
-        if password_configured() and check_password((form.get("password") or [""])[0]):
-            FAILED_LOGINS.pop(client, None)
-            logger.warning("config login from %s", client)
-            cookie = f"{SESSION_COOKIE}={new_session()}; HttpOnly; SameSite=Strict; Path=/; Max-Age={SESSION_TTL_SEC}"
-            nxt = (form.get("next") or [""])[0]
-            self._cfg_redirect(nxt if nxt in ("/guide",) else "/config", {"Set-Cookie": cookie})
-            return
-        count, _ = FAILED_LOGINS.get(client, (0, 0))
-        FAILED_LOGINS[client] = (count + 1, time.time())
-        logger.warning("failed config login from %s (%d)", client, count + 1)
-        self._cfg_html(login_html('<p class="err">Wrong password.</p>', (form.get("next") or [""])[0] if (form.get("next") or [""])[0] in ("/guide",) else ""), 401)
-
     def config_get(self):
         path = self.path.split("?")[0]
         if not (path in ("/config", "/config/") or path.startswith("/config/") or path.startswith("/api/config/")):
             return False
-        if path == "/config/login":
-            if not password_configured():
-                self._cfg_redirect("/config")
-            else:
-                nxt = (self.path.partition("?next=")[2] or "")
-                nxt = nxt if nxt in ("/guide",) else ""
-                self._cfg_html(login_html("", nxt))
-            return True
-        if path == "/config/logout":
-            with AUTH_LOCK:
-                SESSIONS.pop(self._cfg_token(), None)
-            self._cfg_redirect("/config/login", {"Set-Cookie": f"{SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"})
-            return True
-        if not self._cfg_authorized():
-            self._cfg_deny()
-            return True
         if path in ("/config", "/config/"):
             self._cfg_html(UI_FILE.read_text(encoding="utf-8"))
         elif path == "/config/advanced":
             self._cfg_html(ADV_FILE.read_text(encoding="utf-8"))
         elif path == "/api/config/catalog":
-            self._cfg_json({"catalog": cat.CATALOG, "scopes": cat.SCOPES, "auth": password_configured()})
+            self._cfg_json({"catalog": cat.CATALOG, "scopes": cat.SCOPES})
         elif path == "/api/config/devices":
             with READS_LOCK:
                 reads = {ip: public_read(r) for ip, r in READS.items()}
@@ -756,14 +601,8 @@ class ConfigRoutes:
 
     def config_post(self):
         path = self.path.split("?")[0]
-        if path == "/config/login":
-            self._cfg_login_post()
-            return True
         if not path.startswith("/api/config/"):
             return False
-        if not self._cfg_authorized():
-            self._cfg_deny()
-            return True
         length = int(self.headers.get("Content-Length", 0))
         try:
             data = json.loads(self.rfile.read(length) or b"{}")

@@ -842,16 +842,13 @@ def hand_over(mac, checks_ok_ack=False):
 # ---------------------------------------------------------------- HTTP routes
 
 class GuideRoutes:
-    """Mixed into the dashboard handler next to ConfigRoutes (same login):
+    """Mixed into the dashboard handler next to ConfigRoutes :
     /guide and /api/guide/*. guide_get / guide_post return True when handled."""
 
     def guide_get(self):
         path = self.path.split("?")[0]
         if not (path == "/guide" or path.startswith("/api/guide/")):
             return False
-        if not self._cfg_authorized():
-            self._cfg_deny()
-            return True
         if path == "/guide":
             self._cfg_html(UI_FILE.read_text(encoding="utf-8"))
         elif path == "/api/guide/site":
@@ -866,9 +863,6 @@ class GuideRoutes:
         path = self.path.split("?")[0]
         if not path.startswith("/api/guide/"):
             return False
-        if not self._cfg_authorized():
-            self._cfg_deny()
-            return True
         length = int(self.headers.get("Content-Length", 0))
         try:
             data = json.loads(self.rfile.read(length) or b"{}")
